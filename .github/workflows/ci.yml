@@ -12,6 +12,9 @@ jobs:
   build-and-test:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    # macOS runners are advisory: allocations are occasionally cancelled by
+    # GitHub before any step starts. Linux jobs remain the merge gate.
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
     strategy:
       fail-fast: false
       matrix:
