@@ -34,7 +34,7 @@ public:
     std::size_t head = head_.load(std::memory_order_relaxed);
     const std::size_t tail = tail_.load(std::memory_order_relaxed);
     while (head != tail) {
-      reinterpret_cast<T*>(&storage_[head & kMask])->~T();
+      slot_at(head & kMask)->~T();
       ++head;
     }
   }
@@ -46,7 +46,7 @@ public:
     if (tail - head == Capacity) {
       return false;
     }
-    new (&storage_[tail & kMask]) T(value);
+    new (slot_at(tail & kMask)) T(value);
     tail_.store(tail + 1, std::memory_order_release);
     return true;
   }
@@ -57,7 +57,7 @@ public:
     if (tail - head == Capacity) {
       return false;
     }
-    new (&storage_[tail & kMask]) T(std::move(value));
+    new (slot_at(tail & kMask)) T(std::move(value));
     tail_.store(tail + 1, std::memory_order_release);
     return true;
   }
@@ -69,7 +69,7 @@ public:
     if (head == tail) {
       return false;
     }
-    T* slot = reinterpret_cast<T*>(&storage_[head & kMask]);
+    T* slot = slot_at(head & kMask);
     value = std::move(*slot);
     slot->~T();
     head_.store(head + 1, std::memory_order_release);
@@ -96,11 +96,19 @@ public:
   }
 
 private:
-  using Slot = std::aligned_storage_t<sizeof(T), alignof(T)>;
+  static constexpr std::size_t kSlotSize = sizeof(T);
+  static_assert(kSlotSize % alignof(T) == 0,
+                "element size must be a multiple of its alignment");
+  static_assert(alignof(T) <= kCacheLine,
+                "queue elements must not be over-aligned");
+
+  T* slot_at(std::size_t index) noexcept {
+    return reinterpret_cast<T*>(storage_ + index * kSlotSize);
+  }
 
   alignas(kCacheLine) std::atomic<std::size_t> head_{0};
   alignas(kCacheLine) std::atomic<std::size_t> tail_{0};
-  alignas(kCacheLine) Slot storage_[Capacity];
+  alignas(kCacheLine) unsigned char storage_[kSlotSize * Capacity];
 };
 
 } // namespace cppquant
