@@ -38,6 +38,35 @@ and exotic order types.
 There is one `Level` object per non-empty price. Empty levels are erased
 immediately so the best price never points at a dead level.
 
+## Ingress and events
+
+`SpscQueue<T, Capacity>` is a bounded ring buffer with a power-of-two capacity.
+The producer owns `tail_`, the consumer owns `head_`, and publication uses
+release stores with acquire loads. Head and tail sit on separate cache lines to
+avoid false sharing. Elements are constructed in place and destroyed on pop or
+queue destruction; move-only types are supported.
+
+`BasicMatchingEngine` owns the book and two queues:
+
+```text
+producer thread                   engine thread
+---------------                   -------------
+submit(EngineCommand)  ------->   process()
+                                    |
+                                    +--> OrderBook::submit/cancel/modify
+                                    |
+poll(EngineEvent)      <-------   accepted / rejected / trade / ...
+```
+
+Only the engine thread touches the book; the producer only publishes commands.
+The command queue returns `false` when full, so the producer can apply its own
+backpressure policy. Event-queue overflow is counted in `dropped_events()` and
+never blocks matching.
+
+Event order for a submission is: accepted (or rejected), then one event per
+trade, then one event per resting order cancelled by self-trade prevention.
+Cancel and modify emit exactly one event each.
+
 ## Matching
 
 ```text
@@ -146,12 +175,14 @@ catch regressions in future changes.
 
 ## Performance notes
 
-The benchmark has two deterministic workloads:
+The benchmark has three deterministic workloads:
 
 1. **Passive add/cancel** keeps about 1,000 resting orders and measures the
    cost of resting, cancelling and maintaining levels.
 2. **Crossing flow** alternates marketable buys and sells around a 20-tick
    band, producing roughly one trade per order.
+3. **SPSC queue** runs one producer thread and one consumer thread over
+   10 million messages.
 
 The price maps give O(log L) level lookup; the matching loop is linear in the
 number of fills. The dominant costs on a modern laptop are cache misses on the
@@ -164,19 +195,24 @@ for ids.
 
 - Deterministic unit tests for every order type, priority rule, rejection path
   and STP policy.
+- Queue tests for FIFO, wraparound, move-only elements, destruction, queue-full
+  behaviour and a 1M-message two-thread producer/consumer run.
+- Engine tests for accepted/rejected/trade/cancel/modify events, self-trade
+  cancellations, command-queue pressure and dropped-event accounting.
 - A CSV replay that exercises a mixed session end-to-end and is wired into
   CTest.
 - Two randomized flows with a fixed seed. After every submit/cancel/modify the
   test calls `validate()` and checks that the top of book is not crossed. The
   first flow mixes all order types and STP; the second stresses plain limit
   orders.
-- CI runs GCC, Clang and Apple clang, plus an ASan/UBSan job.
+- CI runs GCC, Clang and Apple clang, plus ASan/UBSan and TSan jobs.
 
 ## Possible extensions
 
+- Multi-producer ingress or a dispatcher feeding several engine threads.
 - Stop and stop-limit orders with a trigger book.
 - Iceberg orders with displayed and hidden quantities.
 - Pro-rata or allocation-scheme matching per instrument.
-- A lock-free SPSC ingress queue and a sequenced egress ring for market data.
+- A sequenced egress ring for market data instead of the generic event queue.
 - Binary snapshot/restore for crash recovery.
 - Property tests with a reference model implemented as a simple vector scan.

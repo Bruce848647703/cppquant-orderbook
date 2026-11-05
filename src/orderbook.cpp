@@ -62,6 +62,8 @@ const char* to_string(RejectReason reason) noexcept {
     return "duplicate-order-id";
   case RejectReason::InsufficientLiquidity:
     return "insufficient-liquidity";
+  case RejectReason::UnknownOrder:
+    return "unknown-order";
   }
   return "unknown";
 }

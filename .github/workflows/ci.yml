@@ -94,6 +94,35 @@ jobs:
       - name: Test
         run: ctest --test-dir build-asan --output-on-failure
 
+  thread-sanitizer:
+    name: TSan
+    runs-on: ubuntu-latest
+    env:
+      CC: clang
+      CXX: clang++
+      TSAN_OPTIONS: halt_on_error=1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Configure
+        run: >
+          cmake -S . -B build-tsan -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCPPQUANT_TSAN=ON
+          -DCPPQUANT_WERROR=ON
+
+      - name: Build
+        run: cmake --build build-tsan --parallel
+
+      - name: Test
+        run: ctest --test-dir build-tsan -R orderbook_tests --output-on-failure
+
   package:
     name: Install and consume package
     runs-on: ubuntu-latest

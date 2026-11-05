@@ -14,6 +14,7 @@ warm-up; use warmed medians when comparing changes.
 | Passive add/cancel | 500,000 orders | 78.2 ns/order | 12.78 M orders/s | 1,000 |
 | Crossing flow | 500,000 orders | 60.6 ns/order | 16.51 M orders/s | 1,159 |
 | Crossing trades | 500,000 orders | — | 493,482 trades | — |
+| SPSC queue, two threads | 10,000,000 messages | 28.7 ns/message | 34.9 M messages/s | — |
 
 Command:
 
@@ -46,8 +47,23 @@ count stays constant across 12,000 add/cancel cycles. The crossing workload
 benefits less because fills remove orders, so allocation is a smaller share of
 its cost.
 
+## W2: SPSC queue
+
+The ingress queue is a bounded single-producer/single-consumer ring buffer with
+power-of-two capacity and release/acquire publication. The benchmark uses one
+producer thread and one consumer thread, 10 million `uint64_t` messages and a
+1,024-slot queue.
+
+| Configuration | Messages | Latency | Throughput |
+| --- | ---: | ---: | ---: |
+| Two threads, 1,024 slots | 10,000,000 | 28.7 ns/message | 34.9 M messages/s |
+
+The queue test runs the same pattern for 1 million messages under TSan and
+checks the sum, count and final emptiness. The event queue uses the same
+implementation with a larger capacity.
+
 ## Planned baselines
 
-- W2: SPSC queue throughput and p99 latency, matching-engine events/s.
+- W3: risk-gateway overhead per order.
 - W4: market data encode/decode throughput.
 - W6: journal replay and snapshot restore time.

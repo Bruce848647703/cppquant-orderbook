@@ -1,11 +1,14 @@
 #include "cppquant/orderbook.hpp"
+#include "cppquant/spsc_queue.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <random>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace cppquant;
@@ -111,6 +114,52 @@ ScenarioResult run_crossing(std::size_t pairs, std::uint64_t seed) {
   return result;
 }
 
+bool run_spsc_queue(std::size_t messages) {
+  SpscQueue<std::uint64_t, 1024> queue;
+  std::atomic<bool> start{false};
+  std::uint64_t consumed_sum = 0;
+
+  const auto start_time = std::chrono::steady_clock::now();
+  std::thread producer([&]() {
+    while (!start.load(std::memory_order_acquire)) {
+    }
+    for (std::uint64_t value = 1; value <= messages; ++value) {
+      while (!queue.try_push(value)) {
+      }
+    }
+  });
+
+  std::thread consumer([&]() {
+    while (!start.load(std::memory_order_acquire)) {
+    }
+    std::uint64_t value = 0;
+    std::size_t count = 0;
+    while (count < messages) {
+      if (queue.try_pop(value)) {
+        consumed_sum += value;
+        ++count;
+      }
+    }
+  });
+
+  start.store(true, std::memory_order_release);
+  producer.join();
+  consumer.join();
+  const auto end_time = std::chrono::steady_clock::now();
+  const double seconds = elapsed_seconds(start_time, end_time);
+
+  const std::uint64_t expected = static_cast<std::uint64_t>(messages) *
+                                 (static_cast<std::uint64_t>(messages) + 1) / 2;
+  const bool ok = consumed_sum == expected && queue.empty();
+
+  std::printf(
+      "SPSC queue (2 threads) %10zu msgs  %8.1f ns/msg  %6.2f M msgs/s  %s\n",
+      messages, seconds * 1e9 / static_cast<double>(messages),
+      static_cast<double>(messages) / seconds / 1e6,
+      ok ? "ok" : "checksum-mismatch");
+  return ok;
+}
+
 void report(const char* name, const ScenarioResult& result) {
   const double ns_per_order =
       result.seconds * 1e9 / static_cast<double>(result.orders);
@@ -137,12 +186,14 @@ void report(const char* name, const ScenarioResult& result) {
 int main(int argc, char** argv) {
   std::size_t passive_operations = 500'000;
   std::size_t crossing_pairs = 250'000;
+  std::size_t queue_messages = 10'000'000;
 
   for (int index = 1; index < argc; ++index) {
     const std::string argument = argv[index];
     if (argument == "--quick") {
       passive_operations = 20'000;
       crossing_pairs = 10'000;
+      queue_messages = 1'000'000;
     } else if (argument == "--help" || argument == "-h") {
       std::printf("usage: %s [--quick]\n", argv[0]);
       return 0;
@@ -161,8 +212,10 @@ int main(int argc, char** argv) {
   const auto crossing = run_crossing(crossing_pairs, 42);
   report("crossing flow", crossing);
 
+  const bool queue_ok = run_spsc_queue(queue_messages);
+
   const auto checksum = passive.quantity + crossing.quantity;
   std::printf("\nchecksum (quantity traded): %lld\n",
               static_cast<long long>(checksum));
-  return 0;
+  return queue_ok ? 0 : 1;
 }

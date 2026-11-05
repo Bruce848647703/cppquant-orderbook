@@ -10,11 +10,19 @@ All notable changes to this project are documented here.
   configurable order capacity. Steady-state add/cancel no longer touches the
   global allocator.
 - Tests for pool reuse, capacity exhaustion, clear/reset and non-copyability.
+- Bounded lock-free SPSC ring buffer with release/acquire publication.
+- Event-driven `BasicMatchingEngine`: one thread enqueues submit/cancel/modify
+  commands, the engine thread drains them and emits accepted, rejected, trade,
+  cancel, modify and self-trade-cancellation events.
+- Queue and engine tests, including a 1M-message concurrent producer/consumer
+  run, queue-full handling and dropped-event accounting.
+- ThreadSanitizer build option and CI job.
 
 ### Changed
 
 - Passive add/cancel throughput improved by about 30% on the reference machine;
   crossing flow by about 10%. See `docs/BENCHMARKS.md`.
+- The benchmark now also reports two-thread SPSC queue throughput.
 
 ### Planned
 

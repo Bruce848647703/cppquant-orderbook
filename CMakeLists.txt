@@ -5,6 +5,7 @@ option(CPPQUANT_BUILD_TESTS "Build the unit tests" ON)
 option(CPPQUANT_BUILD_BENCHMARKS "Build the benchmark" ON)
 option(CPPQUANT_BUILD_EXAMPLES "Build the examples" ON)
 option(CPPQUANT_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(CPPQUANT_TSAN "Build with ThreadSanitizer" OFF)
 option(CPPQUANT_WERROR "Treat compiler warnings as errors" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -31,6 +32,17 @@ if(CPPQUANT_SANITIZE)
     endif()
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
     add_link_options(-fsanitize=address,undefined)
+endif()
+
+if(CPPQUANT_TSAN)
+    if(MSVC)
+        message(FATAL_ERROR "CPPQUANT_TSAN requires Clang or GCC")
+    endif()
+    if(CPPQUANT_SANITIZE)
+        message(FATAL_ERROR "CPPQUANT_TSAN cannot be combined with CPPQUANT_SANITIZE")
+    endif()
+    add_compile_options(-fsanitize=thread -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=thread)
 endif()
 
 add_library(cppquant_orderbook
@@ -68,6 +80,8 @@ if(CPPQUANT_BUILD_TESTS)
     add_executable(orderbook_tests
         tests/main.cpp
         tests/test_orderbook.cpp
+        tests/test_spsc_queue.cpp
+        tests/test_engine.cpp
     )
     target_link_libraries(orderbook_tests PRIVATE cppquant::orderbook)
     target_include_directories(orderbook_tests PRIVATE tests)

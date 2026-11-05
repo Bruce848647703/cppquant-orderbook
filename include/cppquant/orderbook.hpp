@@ -44,6 +44,7 @@ enum class RejectReason : std::uint8_t {
   InvalidQuantity,
   DuplicateOrderId,
   InsufficientLiquidity,
+  UnknownOrder,
 };
 
 const char* to_string(Side side) noexcept;

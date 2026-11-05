@@ -12,13 +12,14 @@ self-trade prevention, execution reports and book invariants.
 
 ## Features
 
-- **Price-time priority** via an ordered price map plus an intrusive FIFO list
-  per level.
+- **Price-time priority** via an ordered price map plus a FIFO list per level.
 - **Order types**: limit, market, immediate-or-cancel (IOC), fill-or-kill
   (FOK).
 - **O(1) cancel by id** using a hash map of order locations.
 - **Pooled resting orders**: a chunked fixed-block allocator keeps steady-state
   add/cancel off the global heap, with pool usage exposed through `pool_stats()`.
+- **Lock-free ingress**: a bounded SPSC ring buffer feeds an event-driven
+  `MatchingEngine` that emits accepted/rejected/trade/cancel events.
 - **Cancel/replace** with exchange-style priority rules: reducing quantity at
   the same price keeps priority, a price change or size increase loses it.
 - **Self-trade prevention**: allow, cancel resting, or cancel aggressor.
@@ -29,7 +30,7 @@ self-trade prevention, execution reports and book invariants.
 - **Invariant checker** (`validate()`) used by the tests and safe to call from
   debug builds.
 - **CSV replay tool** and a deterministic benchmark.
-- CMake package export, CI on Linux/macOS with GCC, Clang and sanitizers.
+- CMake package export, CI on Linux/macOS with GCC, Clang, ASan/UBSan and TSan.
 
 ## Quick start
 
@@ -160,9 +161,12 @@ median of five warmed runs):
 | Passive add/cancel | 500,000 | 78.2 | 12.8 M | 1,000 |
 | Crossing flow | 500,000 | 60.6 | 16.5 M | 1,159 |
 
+The two-thread SPSC queue moves 10,000,000 messages at 28.7 ns/message
+(34.9 M messages/s) on the same machine.
+
 These are indicative only; run the benchmark on your own hardware. See
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for the W1 pooled-allocator
-before/after comparison.
+before/after comparison and the W2 queue baseline.
 
 ## Design
 
@@ -172,9 +176,9 @@ asks: std::map<Price, Level, std::less<Price>>      best ask at begin()
 
 Level:
   total quantity
-  std::list<RestingOrder>   FIFO, stable iterators for O(1) erase
+  std::list<RestingOrder, PoolAllocator<RestingOrder>>   FIFO, stable iterators
 
-locations: unordered_map<OrderId, {side, price, list iterator}>
+locations: unordered_map<OrderId, {side, price, level pointer, list iterator}>
 ```
 
 Matching walks the opposite book from the best price outwards. Within a level
@@ -182,8 +186,22 @@ it consumes orders from the front, so arrival order decides priority. Each
 execution removes quantity from the maker; fully filled makers are erased from
 the list, the location map and, when empty, the price level.
 
-See [docs/DESIGN.md](docs/DESIGN.md) for the matching pseudocode, invariants
-and the reasoning behind the data structures.
+### Event-driven engine
+
+```text
+producer thread:  SpscQueue<EngineCommand>  --->  MatchingEngine::process()
+                                                        |
+                                                        v
+consumer thread:  SpscQueue<EngineEvent>   <---  accepted / rejected / trade
+```
+
+`BasicMatchingEngine` owns the book and two bounded single-producer/single-
+consumer queues. The producer only enqueues commands; the engine thread is the
+only one that touches the book. Events that do not fit in the outbound queue
+are counted in `dropped_events()` rather than blocking the engine.
+
+See [docs/DESIGN.md](docs/DESIGN.md) for the matching pseudocode, the queue
+memory ordering, invariants and the reasoning behind the data structures.
 
 ### Complexity
 
@@ -211,6 +229,10 @@ covers:
 - cancel, modify priority rules and crossing-replace rejection;
 - self-trade prevention policies;
 - depth aggregation, snapshots, statistics and clearing;
+- SPSC FIFO, wraparound, move-only elements, destruction and a 1M-message
+  two-thread producer/consumer run;
+- engine accept/reject/trade/cancel/modify events, self-trade cancellation,
+  queue-full handling and dropped-event counting;
 - two randomized flows (20,000 and 5,000 events) that call `validate()` after
   every event to check internal invariants and that the book never crosses.
 
@@ -221,7 +243,7 @@ covers:
 
 ## Limitations and roadmap
 
-- Single instrument, single-threaded. No lock-free queue or symbol sharding.
+- Single instrument. The ingress queue is SPSC; there is no symbol sharding.
 - No hidden/iceberg orders, stop orders, auctions or pro-rata matching.
 - No persistence or market-data feed; replay is CSV only.
 - `modify` does not execute a crossing replacement.
