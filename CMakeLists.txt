@@ -35,6 +35,7 @@ endif()
 
 add_library(cppquant_orderbook
     src/orderbook.cpp
+    src/pool.cpp
 )
 add_library(cppquant::orderbook ALIAS cppquant_orderbook)
 target_include_directories(cppquant_orderbook PUBLIC

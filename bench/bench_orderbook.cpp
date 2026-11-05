@@ -18,6 +18,9 @@ struct ScenarioResult {
   std::size_t peak_orders{};
   std::uint64_t trades{};
   Quantity quantity{};
+  std::size_t pool_chunks{};
+  std::size_t heap_allocations{};
+  std::size_t blocks_in_use{};
 };
 
 double elapsed_seconds(std::chrono::steady_clock::time_point start,
@@ -65,6 +68,10 @@ ScenarioResult run_passive(std::size_t operations, std::uint64_t seed) {
   result.peak_orders = peak;
   result.trades = book.statistics().trades_executed;
   result.quantity = book.statistics().quantity_traded;
+  const auto pool = book.pool_stats();
+  result.pool_chunks = pool.chunks;
+  result.heap_allocations = pool.heap_allocations;
+  result.blocks_in_use = pool.blocks_in_use;
   (void)cancelled;
   return result;
 }
@@ -97,6 +104,10 @@ ScenarioResult run_crossing(std::size_t pairs, std::uint64_t seed) {
   result.peak_orders = peak;
   result.trades = book.statistics().trades_executed;
   result.quantity = book.statistics().quantity_traded;
+  const auto pool = book.pool_stats();
+  result.pool_chunks = pool.chunks;
+  result.heap_allocations = pool.heap_allocations;
+  result.blocks_in_use = pool.blocks_in_use;
   return result;
 }
 
@@ -107,9 +118,9 @@ void report(const char* name, const ScenarioResult& result) {
       static_cast<double>(result.orders) / result.seconds / 1e6;
 
   std::printf("%-20s %10zu orders  %8.1f ns/order  %7.2f M orders/s"
-              "  peak book %zu",
+              "  peak book %zu  pool %zu chunks / %zu heap allocs",
               name, result.orders, ns_per_order, millions_per_second,
-              result.peak_orders);
+              result.peak_orders, result.pool_chunks, result.heap_allocations);
 
   if (result.trades != 0) {
     const double trades_per_order =

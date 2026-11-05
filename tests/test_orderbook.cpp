@@ -2,7 +2,9 @@
 #include "test_framework.hpp"
 
 #include <algorithm>
+#include <new>
 #include <random>
+#include <type_traits>
 #include <vector>
 
 using namespace cppquant;
@@ -537,6 +539,64 @@ TEST(buy_and_sell_cancels_are_independent) {
   CHECK_EQ(book.best_ask(), Price{105});
   CHECK_EQ(book.total_quantity(Side::Sell), 20);
   CHECK(book.validate());
+}
+
+TEST(pool_reuses_blocks_without_heap_growth) {
+  OrderBook book(SelfTradePrevention::Allow, 4'096);
+
+  for (OrderId id = 1; id <= 2'000; ++id) {
+    CHECK(book.add_limit_order(id, Side::Buy, 100, 1).accepted);
+    CHECK(book.cancel(id));
+  }
+  const PoolStats before = book.pool_stats();
+
+  for (OrderId id = 2'001; id <= 14'000; ++id) {
+    CHECK(book.add_limit_order(id, Side::Buy, 100, 1).accepted);
+    CHECK(book.cancel(id));
+  }
+  const PoolStats after = book.pool_stats();
+
+  CHECK_EQ(after.heap_allocations, before.heap_allocations);
+  CHECK_EQ(after.blocks_in_use, before.blocks_in_use);
+  CHECK_EQ(after.blocks_in_use, 0u);
+  CHECK_EQ(book.resting_order_count(), 0u);
+  CHECK(book.validate());
+}
+
+TEST(pool_exhaustion_is_reported_as_bad_alloc) {
+  OrderBook book(SelfTradePrevention::Allow, 4);
+
+  for (OrderId id = 1; id <= 4; ++id) {
+    CHECK(book.add_limit_order(id, Side::Buy, 100, 1).accepted);
+  }
+  CHECK_EQ(book.pool_stats().blocks_in_use, 4u);
+
+  CHECK_THROW(book.add_limit_order(5, Side::Buy, 100, 1), std::bad_alloc);
+  CHECK_EQ(book.resting_order_count(), 4u);
+  CHECK_EQ(book.pool_stats().blocks_in_use, 4u);
+  CHECK(book.validate());
+}
+
+TEST(clear_returns_pool_blocks) {
+  OrderBook book(SelfTradePrevention::Allow, 1'024);
+  book.add_limit_order(1, Side::Buy, 100, 1);
+  book.add_limit_order(2, Side::Sell, 101, 1);
+  CHECK_EQ(book.pool_stats().blocks_in_use, 2u);
+
+  book.clear();
+
+  CHECK_EQ(book.pool_stats().blocks_in_use, 0u);
+  CHECK_EQ(book.pool_stats().heap_allocations, 1u);
+  CHECK(book.empty());
+  CHECK(book.validate());
+}
+
+TEST(order_book_is_non_copyable_and_non_movable) {
+  static_assert(!std::is_copy_constructible_v<OrderBook>);
+  static_assert(!std::is_copy_assignable_v<OrderBook>);
+  static_assert(!std::is_move_constructible_v<OrderBook>);
+  static_assert(!std::is_move_assignable_v<OrderBook>);
+  CHECK(true);
 }
 
 TEST(randomized_flow_keeps_internal_invariants) {

@@ -17,6 +17,8 @@ self-trade prevention, execution reports and book invariants.
 - **Order types**: limit, market, immediate-or-cancel (IOC), fill-or-kill
   (FOK).
 - **O(1) cancel by id** using a hash map of order locations.
+- **Pooled resting orders**: a chunked fixed-block allocator keeps steady-state
+  add/cancel off the global heap, with pool usage exposed through `pool_stats()`.
 - **Cancel/replace** with exchange-style priority rules: reducing quantity at
   the same price keeps priority, a price change or size increase loses it.
 - **Self-trade prevention**: allow, cancel resting, or cancel aggressor.
@@ -150,14 +152,17 @@ The workload is deterministic (fixed seed) and reports ns/order and orders per
 second for two scenarios: passive add/cancel with a bounded book, and a
 continuous crossing flow with marketable limit orders.
 
-Reference numbers from an Apple M-series laptop (Apple clang 21, `-O3`):
+Reference numbers from an Apple M-series laptop (Apple clang 21, `-O3`,
+median of five warmed runs):
 
 | Scenario | Orders | ns/order | Orders/s | Peak book |
 | --- | ---: | ---: | ---: | ---: |
-| Passive add/cancel | 500,000 | 160 | 6.3 M | 1,000 |
-| Crossing flow | 500,000 | 70 | 14.2 M | 1,159 |
+| Passive add/cancel | 500,000 | 78.2 | 12.8 M | 1,000 |
+| Crossing flow | 500,000 | 60.6 | 16.5 M | 1,159 |
 
-These are indicative only; run the benchmark on your own hardware.
+These are indicative only; run the benchmark on your own hardware. See
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md) for the W1 pooled-allocator
+before/after comparison.
 
 ## Design
 

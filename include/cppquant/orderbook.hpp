@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "cppquant/pool.hpp"
+
 namespace cppquant {
 
 using Price = std::int64_t;
@@ -123,7 +125,14 @@ struct BookSnapshot {
 /// The book is not thread-safe: callers must serialize access.
 class OrderBook {
 public:
-  explicit OrderBook(SelfTradePrevention stp = SelfTradePrevention::Allow);
+  explicit OrderBook(
+      SelfTradePrevention stp = SelfTradePrevention::Allow,
+      std::size_t order_capacity = PoolResource::kDefaultCapacity);
+
+  OrderBook(const OrderBook&) = delete;
+  OrderBook& operator=(const OrderBook&) = delete;
+  OrderBook(OrderBook&&) = delete;
+  OrderBook& operator=(OrderBook&&) = delete;
 
   /// Submit an order. Returns the executions and the state of any remainder.
   SubmitResult submit(Order order);
@@ -175,6 +184,9 @@ public:
   const Statistics& statistics() const noexcept {
     return stats_;
   }
+  PoolStats pool_stats() const noexcept {
+    return pool_.stats();
+  }
 
 private:
   struct RestingOrder {
@@ -185,11 +197,15 @@ private:
     std::uint64_t arrival{};
   };
 
-  using OrderList = std::list<RestingOrder>;
+  using OrderList = std::list<RestingOrder, PoolAllocator<RestingOrder>>;
 
   struct Level {
     Quantity total{};
     OrderList orders;
+
+    Level() = default;
+    explicit Level(PoolResource* resource)
+        : orders(PoolAllocator<RestingOrder>(resource)) {}
   };
 
   struct Location {
@@ -210,6 +226,7 @@ private:
   static bool crosses(Side taker_side, Price limit_price,
                       Price book_price) noexcept;
 
+  PoolResource pool_;
   SelfTradePrevention stp_{SelfTradePrevention::Allow};
   BidBook bids_;
   AskBook asks_;

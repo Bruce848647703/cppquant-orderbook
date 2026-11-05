@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Chunked fixed-block pool for resting order nodes, with `pool_stats()` and a
+  configurable order capacity. Steady-state add/cancel no longer touches the
+  global allocator.
+- Tests for pool reuse, capacity exhaustion, clear/reset and non-copyability.
+
+### Changed
+
+- Passive add/cancel throughput improved by about 30% on the reference machine;
+  crossing flow by about 10%. See `docs/BENCHMARKS.md`.
+
 ### Planned
 
 - **0.2** — allocation-free resting orders, bounded SPSC queue, event-driven

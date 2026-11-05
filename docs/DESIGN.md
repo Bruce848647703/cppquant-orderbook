@@ -27,7 +27,8 @@ and exotic order types.
 - Prices are `std::int64_t` ticks; quantities are `std::int64_t` lots.
 - `bids_` is ordered descending and `asks_` ascending, so `begin()` is always
   the best price on either side.
-- Each `Level` owns a `std::list<RestingOrder>`. Appending is O(1) and erasing
+- Each `Level` owns a `std::list<RestingOrder, PoolAllocator<RestingOrder>>`.
+  Appending is O(1) and erasing
   an arbitrary node is O(1) once its iterator is known.
 - `locations_` maps an order id to `{side, price, Level*, list iterator}`.
   `std::map` nodes and `std::list` nodes are stable, so the pointers remain

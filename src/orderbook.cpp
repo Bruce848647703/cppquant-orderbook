@@ -66,7 +66,8 @@ const char* to_string(RejectReason reason) noexcept {
   return "unknown";
 }
 
-OrderBook::OrderBook(SelfTradePrevention stp) : stp_(stp) {}
+OrderBook::OrderBook(SelfTradePrevention stp, std::size_t order_capacity)
+    : pool_(order_capacity), stp_(stp) {}
 
 bool OrderBook::crosses(Side taker_side, Price limit_price,
                         Price book_price) noexcept {
@@ -76,9 +77,9 @@ bool OrderBook::crosses(Side taker_side, Price limit_price,
 
 OrderBook::Level& OrderBook::level_for(Side side, Price price) {
   if (side == Side::Buy) {
-    return bids_.try_emplace(price).first->second;
+    return bids_.try_emplace(price, &pool_).first->second;
   }
-  return asks_.try_emplace(price).first->second;
+  return asks_.try_emplace(price, &pool_).first->second;
 }
 
 void OrderBook::rest_order(const Order& order, bool count_stats) {
@@ -430,6 +431,7 @@ void OrderBook::clear() noexcept {
   bids_.clear();
   asks_.clear();
   locations_.clear();
+  pool_.reset();
   last_trade_price_.reset();
   next_arrival_ = 1;
   next_trade_sequence_ = 1;
