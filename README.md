@@ -20,6 +20,8 @@ self-trade prevention, execution reports and book invariants.
   add/cancel off the global heap, with pool usage exposed through `pool_stats()`.
 - **Lock-free ingress**: a bounded SPSC ring buffer feeds an event-driven
   `MatchingEngine` that emits accepted/rejected/trade/cancel events.
+- **Pre-trade risk**: order quantity, notional, net position, price collar and
+  open-order limits, with rejection counters by reason and account.
 - **Cancel/replace** with exchange-style priority rules: reducing quantity at
   the same price keeps priority, a price change or size increase loses it.
 - **Self-trade prevention**: allow, cancel resting, or cancel aggressor.
@@ -162,11 +164,13 @@ median of five warmed runs):
 | Crossing flow | 500,000 | 60.6 | 16.5 M | 1,159 |
 
 The two-thread SPSC queue moves 10,000,000 messages at 28.7 ns/message
-(34.9 M messages/s) on the same machine.
+(34.9 M messages/s) on the same machine. The event engine processes 1,000,000
+market commands at about 12.3 ns/command (81.5 M commands/s); enabling the risk
+gateway stays within measurement noise (under 2%).
 
 These are indicative only; run the benchmark on your own hardware. See
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for the W1 pooled-allocator
-before/after comparison and the W2 queue baseline.
+comparison, the W2 queue baseline and the W3 risk overhead.
 
 ## Design
 
@@ -199,6 +203,31 @@ consumer thread:  SpscQueue<EngineEvent>   <---  accepted / rejected / trade
 consumer queues. The producer only enqueues commands; the engine thread is the
 only one that touches the book. Events that do not fit in the outbound queue
 are counted in `dropped_events()` rather than blocking the engine.
+
+### Pre-trade risk
+
+```cpp
+RiskLimits limits;
+limits.max_order_quantity = 1'000;
+limits.max_order_notional = 1'000'000;
+limits.max_position = 5'000;
+limits.price_collar_bps = 500;   // 5%
+limits.max_open_orders = 100;
+
+MatchingEngine engine(SelfTradePrevention::Allow,
+                      PoolResource::kDefaultCapacity, limits);
+engine.risk().set_reference_price(10'000);
+
+engine.submit(EngineCommand::submit(order));
+// rejected orders emit Rejected and never reach the book
+```
+
+`RiskGateway` is a stateless checker over a `RiskContext` (position, working
+quantity, open orders). The engine maintains that context from accepted orders
+and fills, so the position limit includes working-order exposure. Accepted and
+rejected counts are available globally, by reason and by account.
+
+See [docs/RISK.md](docs/RISK.md) for limit semantics and counter details.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the matching pseudocode, the queue
 memory ordering, invariants and the reasoning behind the data structures.
@@ -233,6 +262,8 @@ covers:
   two-thread producer/consumer run;
 - engine accept/reject/trade/cancel/modify events, self-trade cancellation,
   queue-full handling and dropped-event counting;
+- risk limits (quantity, notional, position, collar, open orders), working
+  exposure, counter accounting and no-mutation-on-reject;
 - two randomized flows (20,000 and 5,000 events) that call `validate()` after
   every event to check internal invariants and that the book never crosses.
 

@@ -45,6 +45,12 @@ enum class RejectReason : std::uint8_t {
   DuplicateOrderId,
   InsufficientLiquidity,
   UnknownOrder,
+  MaxOrderQuantity,
+  MaxOrderNotional,
+  MaxPosition,
+  PriceCollar,
+  MaxOpenOrders,
+  Count,
 };
 
 const char* to_string(Side side) noexcept;
@@ -71,6 +77,8 @@ struct Trade {
   Price price{};
   Quantity quantity{};
   Side taker_side{};
+  AccountId taker_account{};
+  AccountId maker_account{};
 };
 
 struct SubmitResult {

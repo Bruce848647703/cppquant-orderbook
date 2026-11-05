@@ -15,6 +15,8 @@ warm-up; use warmed medians when comparing changes.
 | Crossing flow | 500,000 orders | 60.6 ns/order | 16.51 M orders/s | 1,159 |
 | Crossing trades | 500,000 orders | — | 493,482 trades | — |
 | SPSC queue, two threads | 10,000,000 messages | 28.7 ns/message | 34.9 M messages/s | — |
+| Engine, no risk | 1,000,000 commands | 12.3 ns/command | 81.5 M commands/s | — |
+| Engine, risk enabled | 1,000,000 commands | 12.2 ns/command | 81.8 M commands/s | — |
 
 Command:
 
@@ -62,8 +64,23 @@ The queue test runs the same pattern for 1 million messages under TSan and
 checks the sum, count and final emptiness. The event queue uses the same
 implementation with a larger capacity.
 
+## W3: risk gateway overhead
+
+The engine benchmark submits one million non-crossing market commands in
+batches of 1,000 and drains the event queue after each batch. It runs once with
+all risk limits disabled and once with quantity, notional, position, collar and
+open-order limits enabled.
+
+| Configuration | Commands | Latency | Throughput |
+| --- | ---: | ---: | ---: |
+| Engine, no risk | 1,000,000 | 12.3 ns/command | 81.5 M commands/s |
+| Engine, risk enabled | 1,000,000 | 12.2 ns/command | 81.8 M commands/s |
+
+The difference is within run-to-run noise (under 2%). The risk path is a few
+integer comparisons and two hash-map lookups, so it does not move the dominant
+cost of command processing, queue handoff and event emission.
+
 ## Planned baselines
 
-- W3: risk-gateway overhead per order.
 - W4: market data encode/decode throughput.
 - W6: journal replay and snapshot restore time.

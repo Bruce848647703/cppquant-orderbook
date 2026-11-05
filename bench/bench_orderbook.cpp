@@ -1,3 +1,4 @@
+#include "cppquant/engine.hpp"
 #include "cppquant/orderbook.hpp"
 #include "cppquant/spsc_queue.hpp"
 
@@ -160,6 +161,46 @@ bool run_spsc_queue(std::size_t messages) {
   return ok;
 }
 
+void run_engine(bool with_risk, std::size_t commands) {
+  RiskLimits limits;
+  if (with_risk) {
+    limits.max_order_quantity = 100;
+    limits.max_order_notional = 10'000.0;
+    limits.max_position = 1'000;
+    limits.price_collar_bps = 500.0;
+    limits.max_open_orders = 100;
+  }
+
+  MatchingEngine engine(SelfTradePrevention::Allow,
+                        PoolResource::kDefaultCapacity, limits);
+  engine.risk().set_reference_price(100);
+
+  constexpr std::size_t kBatch = 1'000;
+  EngineEvent event;
+  OrderId id = 1;
+  std::size_t processed = 0;
+
+  const auto start = std::chrono::steady_clock::now();
+  while (processed < commands) {
+    const std::size_t batch = std::min(kBatch, commands - processed);
+    for (std::size_t index = 0; index < batch; ++index) {
+      engine.submit(EngineCommand::submit(
+          Order{id++, 1, Side::Buy, OrderType::Market, 0, 10}));
+    }
+    engine.process();
+    while (engine.poll(event)) {
+    }
+    processed += batch;
+  }
+  const auto end = std::chrono::steady_clock::now();
+  const double seconds = elapsed_seconds(start, end);
+
+  std::printf("engine %s %10zu cmds  %8.1f ns/cmd  %6.2f M cmds/s\n",
+              with_risk ? "with risk   " : "without risk", commands,
+              seconds * 1e9 / static_cast<double>(commands),
+              static_cast<double>(commands) / seconds / 1e6);
+}
+
 void report(const char* name, const ScenarioResult& result) {
   const double ns_per_order =
       result.seconds * 1e9 / static_cast<double>(result.orders);
@@ -187,6 +228,7 @@ int main(int argc, char** argv) {
   std::size_t passive_operations = 500'000;
   std::size_t crossing_pairs = 250'000;
   std::size_t queue_messages = 10'000'000;
+  std::size_t engine_commands = 1'000'000;
 
   for (int index = 1; index < argc; ++index) {
     const std::string argument = argv[index];
@@ -194,6 +236,7 @@ int main(int argc, char** argv) {
       passive_operations = 20'000;
       crossing_pairs = 10'000;
       queue_messages = 1'000'000;
+      engine_commands = 100'000;
     } else if (argument == "--help" || argument == "-h") {
       std::printf("usage: %s [--quick]\n", argv[0]);
       return 0;
@@ -213,6 +256,8 @@ int main(int argc, char** argv) {
   report("crossing flow", crossing);
 
   const bool queue_ok = run_spsc_queue(queue_messages);
+  run_engine(false, engine_commands);
+  run_engine(true, engine_commands);
 
   const auto checksum = passive.quantity + crossing.quantity;
   std::printf("\nchecksum (quantity traded): %lld\n",

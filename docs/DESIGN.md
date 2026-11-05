@@ -67,6 +67,18 @@ Event order for a submission is: accepted (or rejected), then one event per
 trade, then one event per resting order cancelled by self-trade prevention.
 Cancel and modify emit exactly one event each.
 
+## Pre-trade risk
+
+`RiskGateway` checks quantity, notional, net position, price collar and
+open-order limits before `OrderBook::submit`. It is stateless: the engine builds
+a `RiskContext` from filled positions, signed working quantity and open-order
+count. The engine updates that context from trades and from orders that rest,
+fill, cancel or are removed by self-trade prevention.
+
+Trades carry taker and maker account ids specifically so position accounting
+works without exposing book internals. Rejections increment global, per-reason
+and per-account counters. See [RISK.md](RISK.md) for the exact semantics.
+
 ## Matching
 
 ```text
@@ -199,6 +211,8 @@ for ids.
   behaviour and a 1M-message two-thread producer/consumer run.
 - Engine tests for accepted/rejected/trade/cancel/modify events, self-trade
   cancellations, command-queue pressure and dropped-event accounting.
+- Risk tests for every limit, working-order exposure, fill-driven position
+  updates, counter accounting and no-mutation-on-reject.
 - A CSV replay that exercises a mixed session end-to-end and is wired into
   CTest.
 - Two randomized flows with a fixed seed. After every submit/cancel/modify the

@@ -48,6 +48,7 @@ endif()
 add_library(cppquant_orderbook
     src/orderbook.cpp
     src/pool.cpp
+    src/risk.cpp
 )
 add_library(cppquant::orderbook ALIAS cppquant_orderbook)
 target_include_directories(cppquant_orderbook PUBLIC
@@ -82,6 +83,7 @@ if(CPPQUANT_BUILD_TESTS)
         tests/test_orderbook.cpp
         tests/test_spsc_queue.cpp
         tests/test_engine.cpp
+        tests/test_risk.cpp
     )
     target_link_libraries(orderbook_tests PRIVATE cppquant::orderbook)
     target_include_directories(orderbook_tests PRIVATE tests)

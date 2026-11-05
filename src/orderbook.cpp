@@ -64,6 +64,18 @@ const char* to_string(RejectReason reason) noexcept {
     return "insufficient-liquidity";
   case RejectReason::UnknownOrder:
     return "unknown-order";
+  case RejectReason::MaxOrderQuantity:
+    return "max-order-quantity";
+  case RejectReason::MaxOrderNotional:
+    return "max-order-notional";
+  case RejectReason::MaxPosition:
+    return "max-position";
+  case RejectReason::PriceCollar:
+    return "price-collar";
+  case RejectReason::MaxOpenOrders:
+    return "max-open-orders";
+  case RejectReason::Count:
+    return "count";
   }
   return "unknown";
 }
@@ -208,9 +220,9 @@ SubmitResult OrderBook::submit(Order order) {
         }
 
         const Quantity executed = std::min(remaining, maker.quantity);
-        result.trades.push_back(Trade{next_trade_sequence_++, order.id,
-                                      maker.id, level_it->first, executed,
-                                      order.side});
+        result.trades.push_back(
+            Trade{next_trade_sequence_++, order.id, maker.id, level_it->first,
+                  executed, order.side, order.account, maker.account});
 
         remaining -= executed;
         maker.quantity -= executed;

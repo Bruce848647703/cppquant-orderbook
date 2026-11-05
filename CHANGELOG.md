@@ -17,12 +17,20 @@ All notable changes to this project are documented here.
 - Queue and engine tests, including a 1M-message concurrent producer/consumer
   run, queue-full handling and dropped-event accounting.
 - ThreadSanitizer build option and CI job.
+- `RiskGateway` with order quantity, notional, position, price-collar and
+  open-order limits.
+- Engine-side position/working-order tracking, per-reason and per-account
+  rejection counters, and no-mutation-on-reject semantics.
+- Risk tests and a benchmark comparing engine throughput with and without the
+  gateway.
 
 ### Changed
 
 - Passive add/cancel throughput improved by about 30% on the reference machine;
   crossing flow by about 10%. See `docs/BENCHMARKS.md`.
-- The benchmark now also reports two-thread SPSC queue throughput.
+- The benchmark reports two-thread SPSC queue throughput.
+- Trades now carry taker and maker account ids.
+- The benchmark also reports engine command throughput and risk overhead.
 
 ### Planned
 
