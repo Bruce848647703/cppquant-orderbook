@@ -50,6 +50,7 @@ enum class RejectReason : std::uint8_t {
   MaxPosition,
   PriceCollar,
   MaxOpenOrders,
+  UnknownSymbol,
   Count,
 };
 

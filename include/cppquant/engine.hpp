@@ -6,9 +6,14 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace cppquant {
+
+using SymbolId = std::uint32_t;
 
 enum class EngineCommandType : std::uint8_t {
   Submit,
@@ -33,6 +38,7 @@ struct EngineCommand {
   OrderId order_id{};
   Price new_price{};
   Quantity new_quantity{};
+  SymbolId symbol_id{};
 
   static EngineCommand submit(Order order) {
     EngineCommand command;
@@ -41,10 +47,22 @@ struct EngineCommand {
     return command;
   }
 
+  static EngineCommand submit(SymbolId symbol_id, Order order) {
+    EngineCommand command = submit(order);
+    command.symbol_id = symbol_id;
+    return command;
+  }
+
   static EngineCommand cancel(OrderId id) {
     EngineCommand command;
     command.type = EngineCommandType::Cancel;
     command.order_id = id;
+    return command;
+  }
+
+  static EngineCommand cancel(SymbolId symbol_id, OrderId id) {
+    EngineCommand command = cancel(id);
+    command.symbol_id = symbol_id;
     return command;
   }
 
@@ -56,6 +74,13 @@ struct EngineCommand {
     command.new_quantity = quantity;
     return command;
   }
+
+  static EngineCommand modify(SymbolId symbol_id, OrderId id, Price price,
+                              Quantity quantity) {
+    EngineCommand command = modify(id, price, quantity);
+    command.symbol_id = symbol_id;
+    return command;
+  }
 };
 
 struct EngineEvent {
@@ -65,6 +90,8 @@ struct EngineEvent {
   Quantity remaining{};
   bool rested{};
   Trade trade{};
+  SymbolId symbol_id{};
+  std::uint64_t sequence{};
 };
 
 inline const char* to_string(EngineCommandType type) noexcept {
@@ -332,5 +359,61 @@ private:
 };
 
 using MatchingEngine = BasicMatchingEngine<>;
+
+/// Multi-symbol engine with interned symbol ids and per-symbol books.
+///
+/// Commands and events carry a `SymbolId`; events also carry a per-symbol
+/// monotonically increasing sequence. One producer may enqueue commands while
+/// one engine thread drains them, matching the SPSC contract of the queues.
+class MultiSymbolEngine {
+public:
+  static constexpr std::size_t kCommandCapacity = 4096;
+  static constexpr std::size_t kEventCapacity = 8192;
+
+  explicit MultiSymbolEngine(
+      SelfTradePrevention stp = SelfTradePrevention::Allow,
+      std::size_t order_capacity = PoolResource::kDefaultCapacity);
+
+  /// Intern a symbol and create its book. Idempotent; ids start at 1.
+  SymbolId add_symbol(std::string symbol);
+
+  /// Returns 0 when the symbol is unknown.
+  SymbolId find_symbol(const std::string& symbol) const noexcept;
+
+  const std::string& symbol_name(SymbolId symbol_id) const;
+  std::size_t symbol_count() const noexcept;
+
+  OrderBook* book(SymbolId symbol_id) noexcept;
+  const OrderBook* book(SymbolId symbol_id) const noexcept;
+
+  bool submit(const EngineCommand& command);
+  bool poll(EngineEvent& event);
+  void process();
+
+  std::size_t pending_commands() const noexcept;
+  std::size_t pending_events() const noexcept;
+  std::size_t dropped_events() const noexcept;
+
+private:
+  struct SymbolInfo {
+    SymbolId id{};
+    std::string name;
+    std::unique_ptr<OrderBook> book;
+    std::uint64_t next_sequence{1};
+  };
+
+  SymbolInfo* find_info(SymbolId symbol_id) noexcept;
+  const SymbolInfo* find_info(SymbolId symbol_id) const noexcept;
+  void emit(SymbolInfo& symbol, const EngineEvent& event);
+  void emit_invalid(SymbolId symbol_id, const EngineEvent& event);
+
+  SelfTradePrevention stp_;
+  std::size_t order_capacity_;
+  std::vector<SymbolInfo> symbols_;
+  std::unordered_map<std::string, SymbolId> symbol_ids_;
+  SpscQueue<EngineCommand, kCommandCapacity> inbound_;
+  SpscQueue<EngineEvent, kEventCapacity> outbound_;
+  std::size_t dropped_events_{};
+};
 
 } // namespace cppquant

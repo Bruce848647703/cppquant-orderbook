@@ -97,6 +97,13 @@ Snapshot cost is dominated by allocating and copying the output vector; the
 codec itself only performs integer conversions. Delta decoding is a single
 allocation-free pass over a 29-byte record.
 
+## W5: multi-symbol engine
+
+No separate throughput benchmark yet. `MultiSymbolEngine` adds one symbol-id
+lookup per command and keeps one book per symbol; the single-book hot path and
+benchmark numbers are unchanged. A sharded multi-symbol throughput baseline
+will be added with the journal/recovery work.
+
 ## Planned baselines
 
 - W6: journal replay and snapshot restore time.

@@ -29,6 +29,11 @@ All notable changes to this project are documented here.
 - `OrderBook::resting_orders()` and priority-preserving `reduce()`.
 - Market data round-trip, rebuild, wire-size and malformed-input tests.
 - Market data encode/decode benchmark and `docs/MARKET_DATA.md`.
+- `MultiSymbolEngine` with interned symbol ids, one order book per symbol and
+  per-symbol event sequences.
+- Symbol-aware submit/cancel/modify commands and `UnknownSymbol` rejection.
+- Multi-symbol replay CLI and sample session.
+- Multi-symbol tests for isolation, duplicate ids and sequence assignment.
 
 ### Changed
 

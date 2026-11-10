@@ -50,6 +50,7 @@ add_library(cppquant_orderbook
     src/pool.cpp
     src/risk.cpp
     src/market_data.cpp
+    src/multi_symbol_engine.cpp
 )
 add_library(cppquant::orderbook ALIAS cppquant_orderbook)
 target_include_directories(cppquant_orderbook PUBLIC
@@ -66,6 +67,12 @@ if(CPPQUANT_BUILD_EXAMPLES)
     )
     target_link_libraries(orderbook_replay PRIVATE cppquant::orderbook)
     cppquant_set_warnings(orderbook_replay)
+
+    add_executable(orderbook_replay_multi
+        examples/replay_multi.cpp
+    )
+    target_link_libraries(orderbook_replay_multi PRIVATE cppquant::orderbook)
+    cppquant_set_warnings(orderbook_replay_multi)
 endif()
 
 if(CPPQUANT_BUILD_BENCHMARKS)
@@ -86,6 +93,7 @@ if(CPPQUANT_BUILD_TESTS)
         tests/test_engine.cpp
         tests/test_risk.cpp
         tests/test_market_data.cpp
+        tests/test_multi_symbol_engine.cpp
     )
     target_link_libraries(orderbook_tests PRIVATE cppquant::orderbook)
     target_include_directories(orderbook_tests PRIVATE tests)
@@ -99,6 +107,11 @@ if(CPPQUANT_BUILD_TESTS)
             COMMAND orderbook_replay ${CMAKE_CURRENT_SOURCE_DIR}/data/sample_session.csv
         )
         set_tests_properties(orderbook_replay_sample PROPERTIES TIMEOUT 60)
+
+        add_test(NAME orderbook_replay_multi_sample
+            COMMAND orderbook_replay_multi ${CMAKE_CURRENT_SOURCE_DIR}/data/sample_multi_session.csv
+        )
+        set_tests_properties(orderbook_replay_multi_sample PROPERTIES TIMEOUT 60)
     endif()
 
     if(TARGET orderbook_bench)

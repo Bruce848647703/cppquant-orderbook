@@ -20,6 +20,8 @@ self-trade prevention, execution reports and book invariants.
   add/cancel off the global heap, with pool usage exposed through `pool_stats()`.
 - **Lock-free ingress**: a bounded SPSC ring buffer feeds an event-driven
   `MatchingEngine` that emits accepted/rejected/trade/cancel events.
+- **Multi-symbol engine**: interned symbol ids, one book per symbol and
+  per-symbol event sequences.
 - **Pre-trade risk**: order quantity, notional, net position, price collar and
   open-order limits, with rejection counters by reason and account.
 - **Binary market data**: versioned order-by-order snapshots and add/remove/
@@ -207,6 +209,27 @@ consumer queues. The producer only enqueues commands; the engine thread is the
 only one that touches the book. Events that do not fit in the outbound queue
 are counted in `dropped_events()` rather than blocking the engine.
 
+### Multi-symbol engine
+
+```cpp
+MultiSymbolEngine engine;
+const SymbolId aaa = engine.add_symbol("AAA");
+const SymbolId bbb = engine.add_symbol("BBB");
+
+engine.submit(EngineCommand::submit(aaa, order));
+engine.submit(EngineCommand::cancel(bbb, order_id));
+engine.process();
+```
+
+Each symbol has its own `OrderBook`, and events carry the symbol id plus a
+per-symbol sequence. Duplicate order ids are allowed across symbols. Unknown
+symbol ids are rejected with `UnknownSymbol`. The same command/event types are
+used by the single-book engine, where the symbol id stays zero.
+
+`orderbook_replay_multi` consumes a long-format CSV with a symbol column and
+prints per-symbol books and trades. See
+[docs/DESIGN.md](docs/DESIGN.md) for the lifecycle.
+
 ### Pre-trade risk
 
 ```cpp
@@ -291,6 +314,8 @@ covers:
   exposure, counter accounting and no-mutation-on-reject;
 - market data snapshot/delta round-trips, exact rebuild, sequence assignment,
   wire sizes and malformed-input rejection;
+- multi-symbol interning, book isolation, duplicate ids across symbols,
+  per-symbol sequences and unknown-symbol rejection;
 - two randomized flows (20,000 and 5,000 events) that call `validate()` after
   every event to check internal invariants and that the book never crosses.
 
@@ -301,15 +326,15 @@ covers:
 
 ## Limitations and roadmap
 
-- Single instrument. The ingress queue is SPSC; there is no symbol sharding.
-- Market data is single-symbol per message; the symbol id is reserved for the
-  multi-symbol milestone.
+- One engine thread; symbols are not sharded across threads.
+- Market data is still one symbol per message; the id field is ready for a
+  combined feed.
 - No hidden/iceberg orders, stop orders, auctions or pro-rata matching.
-- No persistence or market-data feed; replay is CSV only.
+- No persistence or journal replay yet; replay is CSV only.
 - `modify` does not execute a crossing replacement.
 
-Natural next steps are a lock-free ingress queue, order gateway with risk
-checks, and a binary market-data encoder for a feed handler.
+Natural next steps are a command journal, snapshot recovery and a multi-symbol
+market-data stream with an explicit sequence-gap policy.
 
 ## Roadmap
 

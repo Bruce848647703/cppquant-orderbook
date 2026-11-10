@@ -74,6 +74,8 @@ const char* to_string(RejectReason reason) noexcept {
     return "price-collar";
   case RejectReason::MaxOpenOrders:
     return "max-open-orders";
+  case RejectReason::UnknownSymbol:
+    return "unknown-symbol";
   case RejectReason::Count:
     return "count";
   }

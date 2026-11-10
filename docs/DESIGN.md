@@ -97,6 +97,25 @@ does not enforce sequence continuity; consumers should request a new snapshot
 when they observe a gap. See [MARKET_DATA.md](MARKET_DATA.md) for the wire
 layout.
 
+## Multi-symbol engine
+
+`MultiSymbolEngine` interns symbol names to `SymbolId` values starting at 1 and
+owns one `OrderBook` per symbol. The same `EngineCommand` and `EngineEvent`
+types are used by the single-book engine; the multi-symbol engine sets
+`symbol_id` on every command/event and assigns a per-symbol sequence.
+
+- `add_symbol` is idempotent and rejects empty names.
+- Commands with an unknown or zero symbol id are rejected with
+  `UnknownSymbol`; no book is touched.
+- Order ids are scoped per book, so the same id can exist in two symbols.
+- Cancel and modify target the book named by the command's symbol id.
+- The replay CLI reads `timestamp,symbol,event,...` and prints per-symbol books
+  and trades.
+
+The engine still uses one SPSC pair and one engine thread. Symbol sharding
+across threads, per-symbol risk contexts and a combined market-data stream are
+future work.
+
 ## Matching
 
 ```text
@@ -233,6 +252,8 @@ for ids.
   updates, counter accounting and no-mutation-on-reject.
 - Market data round-trip, snapshot rebuild, delta application, wire sizes and
   malformed-message tests.
+- Multi-symbol interning, book isolation, duplicate ids across books,
+  per-symbol event sequences and unknown-symbol rejection.
 - A CSV replay that exercises a mixed session end-to-end and is wired into
   CTest.
 - Two randomized flows with a fixed seed. After every submit/cancel/modify the
