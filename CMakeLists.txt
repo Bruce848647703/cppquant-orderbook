@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(cppquant_orderbook VERSION 0.1.0 LANGUAGES CXX)
+project(cppquant_orderbook VERSION 0.5.0 LANGUAGES CXX)
 
 option(CPPQUANT_BUILD_TESTS "Build the unit tests" ON)
 option(CPPQUANT_BUILD_BENCHMARKS "Build the benchmark" ON)

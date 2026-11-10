@@ -7,7 +7,8 @@ deterministic and easy to embed. It favours explicit data structures and clear
 semantics over micro-optimization, while still using the structures a
 production book needs: an ordered price index and stable FIFO queues.
 
-Non-goals: multi-threading, symbol sharding, networking, persistence, auctions
+Non-goals: multi-threaded matching, symbol sharding, networking, auctions,
+and crash-consistent fsync semantics
 and exotic order types.
 
 ## Data model
@@ -288,6 +289,18 @@ for ids.
   orders.
 - CI runs GCC, Clang and Apple clang, plus ASan/UBSan, TSan and libFuzzer
   jobs.
+
+## Threading model
+
+- `OrderBook` and `MatchingEngine` are single-threaded. All mutation happens on
+  the engine thread.
+- Ingres uses a bounded SPSC ring; the producer only publishes commands and the
+  engine publishes events back through a second ring.
+- `MultiSymbolEngine` keeps one book per symbol on the same thread.
+- Journal, snapshot and CSV replay code is not thread-safe; serialize calls or
+  give each thread its own objects.
+- TSan CI covers the queue and engine handoff; the soak test covers long-run
+  single-threaded invariants.
 
 ## Possible extensions
 

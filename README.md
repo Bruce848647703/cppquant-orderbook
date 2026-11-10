@@ -45,6 +45,17 @@ self-trade prevention, execution reports and book invariants.
 - CMake package export, CI on Linux/macOS with GCC, Clang, ASan/UBSan, TSan and
   libFuzzer.
 
+## Documentation
+
+- [docs/DESIGN.md](docs/DESIGN.md): data structures, matching, queue ordering,
+  threading and invariants.
+- [docs/RISK.md](docs/RISK.md): pre-trade limits and rejection counters.
+- [docs/MARKET_DATA.md](docs/MARKET_DATA.md): versioned snapshot/delta wire
+  format.
+- [docs/RECOVERY.md](docs/RECOVERY.md): command journal, snapshots and replay.
+- [docs/FUZZ.md](docs/FUZZ.md): libFuzzer targets, corpus and the soak test.
+- [docs/BENCHMARKS.md](docs/BENCHMARKS.md): measured latency and throughput.
+
 ## Quick start
 
 Requirements: a C++20 compiler and CMake 3.20+. Ninja is optional.

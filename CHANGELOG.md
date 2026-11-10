@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## [Unreleased]
+## [0.5.0] - 2026-11-11
 
 ### Added
 
@@ -47,6 +47,8 @@ All notable changes to this project are documented here.
 - 10M-event deterministic soak executable with periodic `validate()` and pool
   diagnostics.
 - CI libFuzzer job plus `docs/FUZZ.md`.
+- Final API/documentation index, release benchmark refresh and package version
+  0.5.0.
 
 ### Changed
 

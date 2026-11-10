@@ -133,6 +133,8 @@ Fuzzing is not a throughput benchmark. The libFuzzer targets run for 60 seconds
 each in CI with the committed seed corpus, and the portable smoke driver runs
 for a fixed wall-clock duration on macOS. See [FUZZ.md](FUZZ.md).
 
-## Planned baselines
+## W8: release
 
-- W8: final release numbers.
+The W1-W7 numbers above are the final v0.5.0 baselines. The release adds no
+hot-path changes; the journal, fuzz and soak measurements remain the reference
+for recovery and long-run testing.
