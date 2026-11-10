@@ -26,6 +26,8 @@ self-trade prevention, execution reports and book invariants.
   open-order limits, with rejection counters by reason and account.
 - **Binary market data**: versioned order-by-order snapshots and add/remove/
   reduce/modify deltas, with exact book rebuild.
+- **Journal and recovery**: accepted submit/cancel/modify commands persisted in
+  a binary journal, replay to a checksum, and snapshot files for fast restore.
 - **Cancel/replace** with exchange-style priority rules: reducing quantity at
   the same price keeps priority, a price change or size increase loses it.
 - **Self-trade prevention**: allow, cancel resting, or cancel aggressor.
@@ -172,6 +174,8 @@ The two-thread SPSC queue moves 10,000,000 messages at 28.7 ns/message
 market commands at about 12.3 ns/command (81.5 M commands/s); enabling the risk
 gateway stays within measurement noise (under 2%). A 200-order snapshot encodes
 and decodes in about 16.8 µs; an add-order delta decodes in about 24 ns.
+Journal write + read + replay runs at about 6.3M records/s for 100,000 resting
+orders.
 
 These are indicative only; run the benchmark on your own hardware. See
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for the W1 pooled-allocator
@@ -277,6 +281,28 @@ snapshot and applying deltas reproduces the source book exactly.
 See [docs/MARKET_DATA.md](docs/MARKET_DATA.md) for the byte layout and error
 rules.
 
+### Journal and recovery
+
+```cpp
+CommandJournal journal;
+MatchingEngine engine(SelfTradePrevention::Allow,
+                      PoolResource::kDefaultCapacity, {}, &journal);
+
+engine.submit(EngineCommand::submit(order));
+engine.process();
+
+write_journal_file(journal.records(), "session.journal");
+auto read = read_journal_file("session.journal");
+OrderBook restored(SelfTradePrevention::Allow, 200'000);
+restore_snapshot(restored, read_snapshot_file("session.snapshot"));
+replay_journal(read.records, restored);
+```
+
+A journal records only accepted commands. A truncated final record is ignored
+and the complete prefix is replayed. `book_checksum` compares the recovered book
+with the live book. See [docs/RECOVERY.md](docs/RECOVERY.md) for the binary
+format and durability limits.
+
 See [docs/DESIGN.md](docs/DESIGN.md) for the matching pseudocode, the queue
 memory ordering, invariants and the reasoning behind the data structures.
 
@@ -316,6 +342,8 @@ covers:
   wire sizes and malformed-input rejection;
 - multi-symbol interning, book isolation, duplicate ids across symbols,
   per-symbol sequences and unknown-symbol rejection;
+- journal round-trips, rejected-command omission, truncated prefixes, snapshot
+  files and checksum recovery;
 - two randomized flows (20,000 and 5,000 events) that call `validate()` after
   every event to check internal invariants and that the book never crosses.
 
@@ -330,11 +358,13 @@ covers:
 - Market data is still one symbol per message; the id field is ready for a
   combined feed.
 - No hidden/iceberg orders, stop orders, auctions or pro-rata matching.
-- No persistence or journal replay yet; replay is CSV only.
+- The journal is not fsynced per record and has no compaction or rotation.
+- Recovery does not enforce sequence continuity beyond strictly increasing
+  order; a gap shows up as a checksum mismatch.
 - `modify` does not execute a crossing replacement.
 
-Natural next steps are a command journal, snapshot recovery and a multi-symbol
-market-data stream with an explicit sequence-gap policy.
+Natural next steps are a multi-symbol journal, explicit sequence-gap detection
+and a compacted snapshot plus journal bootstrap.
 
 ## Roadmap
 

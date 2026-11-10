@@ -116,6 +116,24 @@ The engine still uses one SPSC pair and one engine thread. Symbol sharding
 across threads, per-symbol risk contexts and a combined market-data stream are
 future work.
 
+## Journal and recovery
+
+`CommandJournal` records accepted submit/cancel/modify commands with a
+monotonic sequence. Risk-rejected and book-rejected commands are not recorded.
+The binary file has an 8-byte `CQJ1` header and 16-byte record headers; payloads
+are 30 bytes for submit, 8 for cancel and 24 for modify (see
+[RECOVERY.md](RECOVERY.md)).
+
+`read_journal_file` returns the complete prefix and sets `truncated` when the
+last record is incomplete. Replay applies records in order and rejects
+non-increasing sequences or state transitions that cannot be applied.
+`book_checksum` hashes resting orders in price-time order so a replayed book can
+be compared bit-for-bit with the live book.
+
+Snapshot files reuse the market-data codec; a snapshot plus journal prefix
+bounds restart time. The journal is not fsynced per record and has no
+compaction.
+
 ## Matching
 
 ```text
@@ -252,6 +270,8 @@ for ids.
   updates, counter accounting and no-mutation-on-reject.
 - Market data round-trip, snapshot rebuild, delta application, wire sizes and
   malformed-message tests.
+- Journal replay/checksum, rejected-command omission, truncated prefixes,
+  snapshot files and sequence validation.
 - Multi-symbol interning, book isolation, duplicate ids across books,
   per-symbol event sequences and unknown-symbol rejection.
 - A CSV replay that exercises a mixed session end-to-end and is wired into

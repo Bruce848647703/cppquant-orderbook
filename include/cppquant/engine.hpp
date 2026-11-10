@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cppquant/journal.hpp"
 #include "cppquant/orderbook.hpp"
 #include "cppquant/risk.hpp"
 #include "cppquant/spsc_queue.hpp"
@@ -140,8 +141,8 @@ public:
   explicit BasicMatchingEngine(
       SelfTradePrevention stp = SelfTradePrevention::Allow,
       std::size_t order_capacity = PoolResource::kDefaultCapacity,
-      RiskLimits risk_limits = {})
-      : book_(stp, order_capacity), risk_(risk_limits) {}
+      RiskLimits risk_limits = {}, CommandJournal* journal = nullptr)
+      : book_(stp, order_capacity), risk_(risk_limits), journal_(journal) {}
 
   bool submit(const EngineCommand& command) {
     return inbound_.try_push(command);
@@ -177,6 +178,9 @@ public:
           break;
         }
         risk_.record_accept(command.order.account);
+        if (journal_ != nullptr) {
+          journal_->append_submit(command.order);
+        }
 
         event.type = EngineEventType::Accepted;
         event.remaining = result.remaining;
@@ -209,6 +213,9 @@ public:
         event.order_id = command.order_id;
         if (book_.cancel(command.order_id)) {
           close_working(command.order_id);
+          if (journal_ != nullptr) {
+            journal_->append_cancel(command.order_id);
+          }
           event.type = EngineEventType::Cancelled;
         } else {
           event.type = EngineEventType::CancelRejected;
@@ -222,6 +229,10 @@ public:
         event.order_id = command.order_id;
         if (book_.modify(command.order_id, command.new_price,
                          command.new_quantity)) {
+          if (journal_ != nullptr) {
+            journal_->append_modify(command.order_id, command.new_price,
+                                    command.new_quantity);
+          }
           auto working = working_.find(command.order_id);
           if (working != working_.end()) {
             const Quantity delta =
@@ -259,6 +270,13 @@ public:
   }
   const RiskGateway& risk() const noexcept {
     return risk_;
+  }
+
+  void set_journal(CommandJournal* journal) noexcept {
+    journal_ = journal;
+  }
+  CommandJournal* journal() const noexcept {
+    return journal_;
   }
 
   std::size_t pending_commands() const noexcept {
@@ -349,6 +367,7 @@ private:
 
   OrderBook book_;
   RiskGateway risk_;
+  CommandJournal* journal_{};
   SpscQueue<EngineCommand, CommandCapacity> inbound_;
   SpscQueue<EngineEvent, EventCapacity> outbound_;
   std::unordered_map<OrderId, WorkingOrder> working_;

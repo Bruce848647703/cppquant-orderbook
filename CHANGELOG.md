@@ -34,6 +34,10 @@ All notable changes to this project are documented here.
 - Symbol-aware submit/cancel/modify commands and `UnknownSymbol` rejection.
 - Multi-symbol replay CLI and sample session.
 - Multi-symbol tests for isolation, duplicate ids and sequence assignment.
+- Binary command journal for accepted submit/cancel/modify commands.
+- Journal write/read with truncated-tail recovery and checksum verification.
+- Snapshot file persistence and restore.
+- Journal and snapshot tests plus `docs/RECOVERY.md`.
 
 ### Changed
 

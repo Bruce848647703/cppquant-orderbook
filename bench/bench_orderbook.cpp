@@ -1,4 +1,5 @@
 #include "cppquant/engine.hpp"
+#include "cppquant/journal.hpp"
 #include "cppquant/market_data.hpp"
 #include "cppquant/orderbook.hpp"
 #include "cppquant/spsc_queue.hpp"
@@ -245,6 +246,38 @@ void run_market_data(std::size_t operations) {
               static_cast<double>(operations) / seconds / 1e6);
 }
 
+void run_journal(std::size_t records) {
+  std::vector<JournalRecord> journal;
+  journal.reserve(records);
+  for (std::size_t index = 0; index < records; ++index) {
+    JournalRecord record;
+    record.sequence = index + 1;
+    record.type = JournalRecordType::Submit;
+    record.order =
+        Order{static_cast<OrderId>(index + 1),   0, Side::Buy, OrderType::Limit,
+              1'000 + static_cast<Price>(index), 1};
+    journal.push_back(record);
+  }
+
+  const char* path = "/tmp/cppquant_orderbook_journal.bin";
+  const auto start = std::chrono::steady_clock::now();
+  write_journal_file(journal, path);
+  const auto read = read_journal_file(path);
+  OrderBook book(SelfTradePrevention::Allow, records + 1);
+  replay_journal(read.records, book);
+  const auto end = std::chrono::steady_clock::now();
+  std::remove(path);
+
+  const double seconds = elapsed_seconds(start, end);
+  const bool ok = !read.truncated && book.resting_order_count() == records;
+  std::printf("journal write+read+replay %8zu records  %8.1f ns/record  %6.2f "
+              "M records/s  %s\n",
+              records, seconds * 1e9 / static_cast<double>(records),
+              static_cast<double>(records) / seconds / 1e6,
+              ok ? "ok" : "checksum-mismatch");
+  sink += static_cast<double>(book.resting_order_count());
+}
+
 void report(const char* name, const ScenarioResult& result) {
   const double ns_per_order =
       result.seconds * 1e9 / static_cast<double>(result.orders);
@@ -274,6 +307,7 @@ int main(int argc, char** argv) {
   std::size_t queue_messages = 10'000'000;
   std::size_t engine_commands = 1'000'000;
   std::size_t market_data_operations = 100'000;
+  std::size_t journal_records = 100'000;
 
   for (int index = 1; index < argc; ++index) {
     const std::string argument = argv[index];
@@ -283,6 +317,7 @@ int main(int argc, char** argv) {
       queue_messages = 1'000'000;
       engine_commands = 100'000;
       market_data_operations = 10'000;
+      journal_records = 10'000;
     } else if (argument == "--help" || argument == "-h") {
       std::printf("usage: %s [--quick]\n", argv[0]);
       return 0;
@@ -305,6 +340,7 @@ int main(int argc, char** argv) {
   run_engine(false, engine_commands);
   run_engine(true, engine_commands);
   run_market_data(market_data_operations);
+  run_journal(journal_records);
 
   const auto checksum = passive.quantity + crossing.quantity;
   std::printf("\nchecksum (quantity traded): %lld\n",

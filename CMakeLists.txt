@@ -51,6 +51,7 @@ add_library(cppquant_orderbook
     src/risk.cpp
     src/market_data.cpp
     src/multi_symbol_engine.cpp
+    src/journal.cpp
 )
 add_library(cppquant::orderbook ALIAS cppquant_orderbook)
 target_include_directories(cppquant_orderbook PUBLIC
@@ -94,6 +95,7 @@ if(CPPQUANT_BUILD_TESTS)
         tests/test_risk.cpp
         tests/test_market_data.cpp
         tests/test_multi_symbol_engine.cpp
+        tests/test_journal.cpp
     )
     target_link_libraries(orderbook_tests PRIVATE cppquant::orderbook)
     target_include_directories(orderbook_tests PRIVATE tests)

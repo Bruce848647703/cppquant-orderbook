@@ -104,6 +104,18 @@ lookup per command and keeps one book per symbol; the single-book hot path and
 benchmark numbers are unchanged. A sharded multi-symbol throughput baseline
 will be added with the journal/recovery work.
 
+## W6: journal recovery
+
+The benchmark builds 100,000 submit records, writes the journal, reads it back
+and replays every command into a fresh book.
+
+| Workload | Records | Latency | Throughput |
+| --- | ---: | ---: | ---: |
+| Journal write+read+replay | 100,000 | 158 ns/record | 6.3 M records/s |
+
+The run includes file I/O, decoding and a fresh order book. Replay checks that
+all 100,000 orders rest and the checksum path is exercised.
+
 ## Planned baselines
 
-- W6: journal replay and snapshot restore time.
+- W7: fuzz/soak throughput and long-run memory.
