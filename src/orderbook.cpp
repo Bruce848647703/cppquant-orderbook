@@ -1,10 +1,24 @@
 #include "cppquant/orderbook.hpp"
 
 #include <algorithm>
+#include <limits>
+#include <stdexcept>
 #include <utility>
 
 namespace cppquant {
 namespace {
+
+Quantity saturating_add(Quantity left, Quantity right) noexcept {
+  const Quantity maximum = std::numeric_limits<Quantity>::max();
+  const Quantity minimum = std::numeric_limits<Quantity>::min();
+  if (right > 0 && left > maximum - right) {
+    return maximum;
+  }
+  if (right < 0 && left < minimum - right) {
+    return minimum;
+  }
+  return left + right;
+}
 
 SubmitResult rejected(const Order& order, RejectReason reason,
                       Statistics& stats) {
@@ -91,6 +105,21 @@ bool OrderBook::crosses(Side taker_side, Price limit_price,
                                  : limit_price <= book_price;
 }
 
+bool OrderBook::can_absorb(Side side, Price price,
+                           Quantity quantity) const noexcept {
+  if (quantity <= 0) {
+    return true;
+  }
+  const Quantity limit = std::numeric_limits<Quantity>::max();
+  if (side == Side::Buy) {
+    const auto iterator = bids_.find(price);
+    return iterator == bids_.end() ||
+           quantity <= limit - iterator->second.total;
+  }
+  const auto iterator = asks_.find(price);
+  return iterator == asks_.end() || quantity <= limit - iterator->second.total;
+}
+
 OrderBook::Level& OrderBook::level_for(Side side, Price price) {
   if (side == Side::Buy) {
     return bids_.try_emplace(price, &pool_).first->second;
@@ -99,6 +128,9 @@ OrderBook::Level& OrderBook::level_for(Side side, Price price) {
 }
 
 void OrderBook::rest_order(const Order& order, bool count_stats) {
+  if (!can_absorb(order.side, order.price, order.quantity)) {
+    throw std::overflow_error("level quantity would overflow");
+  }
   Level* level = &level_for(order.side, order.price);
 
   level->orders.push_back(RestingOrder{order.id, order.account, order.price,
@@ -153,7 +185,7 @@ Quantity OrderBook::available_quantity(const Order& order) const {
           }
           continue;
         }
-        available += maker.quantity;
+        available = saturating_add(available, maker.quantity);
         if (available >= order.quantity) {
           return;
         }
@@ -183,6 +215,10 @@ SubmitResult OrderBook::submit(Order order) {
   }
   if (locations_.contains(order.id)) {
     return rejected(order, RejectReason::DuplicateOrderId, stats_);
+  }
+  if (order.type == OrderType::Limit &&
+      !can_absorb(order.side, order.price, order.quantity)) {
+    return rejected(order, RejectReason::InvalidQuantity, stats_);
   }
 
   if (order.type == OrderType::FillOrKill &&
@@ -229,7 +265,8 @@ SubmitResult OrderBook::submit(Order order) {
         remaining -= executed;
         maker.quantity -= executed;
         level.total -= executed;
-        stats_.quantity_traded += executed;
+        stats_.quantity_traded =
+            saturating_add(stats_.quantity_traded, executed);
         stats_.notional_traded += static_cast<long double>(executed) *
                                   static_cast<long double>(level_it->first);
         last_trade_price_ = level_it->first;
@@ -327,6 +364,9 @@ bool OrderBook::modify(OrderId id, Price new_price, Quantity new_quantity) {
     location.level->total += new_quantity - current.quantity;
     location.it->quantity = new_quantity;
   } else {
+    if (!can_absorb(location.side, new_price, new_quantity)) {
+      return false;
+    }
     remove_resting(id);
     Order replacement{
         id,        current.account, location.side, OrderType::Limit,
@@ -429,11 +469,11 @@ Quantity OrderBook::total_quantity(Side side) const noexcept {
   Quantity total = 0;
   if (side == Side::Buy) {
     for (const auto& [price, level] : bids_) {
-      total += level.total;
+      total = saturating_add(total, level.total);
     }
   } else {
     for (const auto& [price, level] : asks_) {
-      total += level.total;
+      total = saturating_add(total, level.total);
     }
   }
   return total;

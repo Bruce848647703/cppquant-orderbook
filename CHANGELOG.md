@@ -50,6 +50,12 @@ All notable changes to this project are documented here.
 - Final API/documentation index, release benchmark refresh and package version
   0.5.0.
 
+### Fixed
+
+- Reject limit orders whose quantity would overflow a level total and
+  saturate aggregate quantity/available/traded-volume sums. Add regression
+  tests and a fuzzer corpus seed for the snapshot overflow.
+
 ### Changed
 
 - Passive add/cancel throughput improved by about 30% on the reference machine;

@@ -77,13 +77,21 @@ A 10M-event run on the reference machine takes about 0.8 s, ends with about
 
 ## Findings
 
-The initial runs found no crashes, sanitizer reports or invariant violations:
+The initial runs found no crashes in the market-data decoder or replay parser,
+but the CI libFuzzer job found a signed integer overflow when restoring a
+snapshot whose same-price quantities exceeded `int64`. Limit orders now reject
+a level-total overflow, aggregate sums saturate, and the triggering input is in
+`fuzz/corpus/market_data/overflow_snapshot`. Subsequent smoke runs completed
+without a sanitizer report:
 
 | Driver | Inputs | Corpus seeds |
 | --- | ---: | ---: |
 | `fuzz_market_data_smoke` | 4,124,482 | 9 |
 | `fuzz_replay_smoke` | 143,531 | 4 |
 | `orderbook_soak --events 10000000` | 10,000,000 events | — |
+
+Regression tests cover the overflow rejection directly and through snapshot
+restore.
 
 Wall-clock times include host sleep and are not meaningful as throughput
 numbers. The replay parser refactor added regression tests for the boundary

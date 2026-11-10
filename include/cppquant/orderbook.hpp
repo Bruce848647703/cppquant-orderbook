@@ -251,6 +251,7 @@ private:
   bool remove_resting(OrderId id);
   Quantity available_quantity(const Order& order) const;
   Level& level_for(Side side, Price price);
+  bool can_absorb(Side side, Price price, Quantity quantity) const noexcept;
 
   static bool crosses(Side taker_side, Price limit_price,
                       Price book_price) noexcept;

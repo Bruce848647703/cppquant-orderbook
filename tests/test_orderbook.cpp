@@ -2,6 +2,7 @@
 #include "test_framework.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <new>
 #include <random>
 #include <type_traits>
@@ -694,4 +695,22 @@ TEST(randomized_flow_with_allow_policy_keeps_invariants) {
     }
     CHECK(book.validate());
   }
+}
+
+TEST(order_rejects_level_quantity_overflow) {
+  OrderBook book(SelfTradePrevention::Allow, 8);
+  const Quantity maximum = std::numeric_limits<Quantity>::max();
+
+  CHECK(book.add_limit_order(1, Side::Buy, 100, maximum).accepted);
+  const SubmitResult rejected = book.add_limit_order(2, Side::Buy, 100, 1);
+  CHECK(!rejected.accepted);
+  CHECK(rejected.reason == RejectReason::InvalidQuantity);
+  CHECK_EQ(book.resting_order_count(), 1u);
+  CHECK(book.validate());
+
+  CHECK(book.add_limit_order(3, Side::Buy, 101, 1).accepted);
+  CHECK(!book.modify(3, 100, 1));
+  CHECK_EQ(book.quantity_of(3), std::optional<Quantity>{1});
+  CHECK_EQ(book.total_quantity(Side::Buy), maximum);
+  CHECK(book.validate());
 }

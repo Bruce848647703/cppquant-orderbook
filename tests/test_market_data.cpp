@@ -2,6 +2,7 @@
 #include "test_framework.hpp"
 
 #include <cstddef>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -279,4 +280,17 @@ TEST(decoder_rejects_a_bad_side_byte) {
   // Header 24 + id 8 + account 4 = side byte at offset 36.
   bad[36] = std::byte{2};
   CHECK_THROW(decode_delta(bad), std::runtime_error);
+}
+
+TEST(snapshot_restore_rejects_aggregate_quantity_overflow) {
+  MarketDataSnapshot snapshot;
+  snapshot.symbol_id = 1;
+  snapshot.sequence = 1;
+  const Quantity maximum = std::numeric_limits<Quantity>::max();
+  snapshot.orders.push_back(order_view(1, 0, Side::Buy, 100, maximum));
+  snapshot.orders.push_back(order_view(2, 0, Side::Buy, 100, 1));
+
+  OrderBook book(SelfTradePrevention::Allow, 8);
+  CHECK_THROW(restore_snapshot(book, snapshot), std::runtime_error);
+  CHECK(book.validate());
 }
