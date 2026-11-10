@@ -79,6 +79,24 @@ Trades carry taker and maker account ids specifically so position accounting
 works without exposing book internals. Rejections increment global, per-reason
 and per-account counters. See [RISK.md](RISK.md) for the exact semantics.
 
+## Market data
+
+`market_data.hpp` defines a versioned little-endian format with a 24-byte
+header, a 29-byte order record, order-by-order snapshots and four delta types
+(add, remove, reduce, modify). Snapshots list bids best-to-worst, then asks
+best-to-worst, FIFO inside each level.
+
+`restore_snapshot` requires an empty book with enough capacity and rejects any
+order that would trade. `apply_delta` mirrors book operations exactly;
+`reduce()` preserves time priority. The decoder rejects bad magic/version,
+unknown types, payload-size mismatches, truncation, trailing bytes, invalid
+sides and non-positive prices or quantities.
+
+`MarketDataPublisher` assigns monotonically increasing sequences. The codec
+does not enforce sequence continuity; consumers should request a new snapshot
+when they observe a gap. See [MARKET_DATA.md](MARKET_DATA.md) for the wire
+layout.
+
 ## Matching
 
 ```text
@@ -213,6 +231,8 @@ for ids.
   cancellations, command-queue pressure and dropped-event accounting.
 - Risk tests for every limit, working-order exposure, fill-driven position
   updates, counter accounting and no-mutation-on-reject.
+- Market data round-trip, snapshot rebuild, delta application, wire sizes and
+  malformed-message tests.
 - A CSV replay that exercises a mixed session end-to-end and is wired into
   CTest.
 - Two randomized flows with a fixed seed. After every submit/cancel/modify the

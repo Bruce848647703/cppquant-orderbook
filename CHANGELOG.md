@@ -23,6 +23,12 @@ All notable changes to this project are documented here.
   rejection counters, and no-mutation-on-reject semantics.
 - Risk tests and a benchmark comparing engine throughput with and without the
   gateway.
+- Versioned binary market data codec: order-by-order snapshots and
+  add/remove/reduce/modify deltas.
+- `MarketDataPublisher`, snapshot restore and delta application helpers.
+- `OrderBook::resting_orders()` and priority-preserving `reduce()`.
+- Market data round-trip, rebuild, wire-size and malformed-input tests.
+- Market data encode/decode benchmark and `docs/MARKET_DATA.md`.
 
 ### Changed
 

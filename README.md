@@ -22,6 +22,8 @@ self-trade prevention, execution reports and book invariants.
   `MatchingEngine` that emits accepted/rejected/trade/cancel events.
 - **Pre-trade risk**: order quantity, notional, net position, price collar and
   open-order limits, with rejection counters by reason and account.
+- **Binary market data**: versioned order-by-order snapshots and add/remove/
+  reduce/modify deltas, with exact book rebuild.
 - **Cancel/replace** with exchange-style priority rules: reducing quantity at
   the same price keeps priority, a price change or size increase loses it.
 - **Self-trade prevention**: allow, cancel resting, or cancel aggressor.
@@ -166,7 +168,8 @@ median of five warmed runs):
 The two-thread SPSC queue moves 10,000,000 messages at 28.7 ns/message
 (34.9 M messages/s) on the same machine. The event engine processes 1,000,000
 market commands at about 12.3 ns/command (81.5 M commands/s); enabling the risk
-gateway stays within measurement noise (under 2%).
+gateway stays within measurement noise (under 2%). A 200-order snapshot encodes
+and decodes in about 16.8 µs; an add-order delta decodes in about 24 ns.
 
 These are indicative only; run the benchmark on your own hardware. See
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for the W1 pooled-allocator
@@ -229,6 +232,28 @@ rejected counts are available globally, by reason and by account.
 
 See [docs/RISK.md](docs/RISK.md) for limit semantics and counter details.
 
+### Binary market data
+
+```cpp
+#include "cppquant/market_data.hpp"
+
+MarketDataPublisher publisher(/*symbol_id=*/7);
+const auto snapshot_message = publisher.snapshot(book);
+const auto add_message = publisher.add(resting_order);
+
+// Consumer
+OrderBook restored(SelfTradePrevention::Allow, 1024);
+restore_snapshot(restored, decode_snapshot(snapshot_message));
+apply_delta(restored, decode_delta(add_message));
+```
+
+The wire format is little-endian and versioned. Snapshots are order-by-order in
+price-time order; deltas are add, remove, reduce and modify. Restoring a
+snapshot and applying deltas reproduces the source book exactly.
+
+See [docs/MARKET_DATA.md](docs/MARKET_DATA.md) for the byte layout and error
+rules.
+
 See [docs/DESIGN.md](docs/DESIGN.md) for the matching pseudocode, the queue
 memory ordering, invariants and the reasoning behind the data structures.
 
@@ -264,6 +289,8 @@ covers:
   queue-full handling and dropped-event counting;
 - risk limits (quantity, notional, position, collar, open orders), working
   exposure, counter accounting and no-mutation-on-reject;
+- market data snapshot/delta round-trips, exact rebuild, sequence assignment,
+  wire sizes and malformed-input rejection;
 - two randomized flows (20,000 and 5,000 events) that call `validate()` after
   every event to check internal invariants and that the book never crosses.
 
@@ -275,6 +302,8 @@ covers:
 ## Limitations and roadmap
 
 - Single instrument. The ingress queue is SPSC; there is no symbol sharding.
+- Market data is single-symbol per message; the symbol id is reserved for the
+  multi-symbol milestone.
 - No hidden/iceberg orders, stop orders, auctions or pro-rata matching.
 - No persistence or market-data feed; replay is CSV only.
 - `modify` does not execute a crossing replacement.

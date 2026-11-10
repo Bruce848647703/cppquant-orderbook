@@ -437,6 +437,38 @@ Quantity OrderBook::total_quantity(Side side) const noexcept {
   return total;
 }
 
+std::vector<RestingOrderView> OrderBook::resting_orders() const {
+  std::vector<RestingOrderView> orders;
+  orders.reserve(locations_.size());
+
+  auto collect = [&](const auto& book, Side side) {
+    for (const auto& [price, level] : book) {
+      for (const auto& order : level.orders) {
+        orders.push_back(RestingOrderView{order.id, order.account, side, price,
+                                          order.quantity});
+      }
+    }
+  };
+  collect(bids_, Side::Buy);
+  collect(asks_, Side::Sell);
+  return orders;
+}
+
+bool OrderBook::reduce(OrderId id, Quantity new_quantity) {
+  auto location_it = locations_.find(id);
+  if (location_it == locations_.end() || new_quantity <= 0) {
+    return false;
+  }
+
+  Location& location = location_it->second;
+  if (new_quantity > location.it->quantity) {
+    return false;
+  }
+  location.level->total += new_quantity - location.it->quantity;
+  location.it->quantity = new_quantity;
+  return true;
+}
+
 bool OrderBook::empty() const noexcept {
   return locations_.empty();
 }

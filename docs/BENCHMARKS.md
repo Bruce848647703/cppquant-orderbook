@@ -17,6 +17,8 @@ warm-up; use warmed medians when comparing changes.
 | SPSC queue, two threads | 10,000,000 messages | 28.7 ns/message | 34.9 M messages/s | — |
 | Engine, no risk | 1,000,000 commands | 12.3 ns/command | 81.5 M commands/s | — |
 | Engine, risk enabled | 1,000,000 commands | 12.2 ns/command | 81.8 M commands/s | — |
+| Snapshot encode+decode | 100,000 snapshots | 16.8 µs/snapshot | 0.06 M snapshots/s | 200 orders |
+| Delta decode | 100,000 messages | 24.2 ns/message | 41.4 M messages/s | 1 order |
 
 Command:
 
@@ -80,7 +82,21 @@ The difference is within run-to-run noise (under 2%). The risk path is a few
 integer comparisons and two hash-map lookups, so it does not move the dominant
 cost of command processing, queue handoff and event emission.
 
+## W4: binary market data
+
+The snapshot benchmark builds a book with 100 bids and 100 asks, encodes the
+order-by-order snapshot (5,828 bytes), decodes it, and repeats 100,000 times.
+The delta benchmark decodes a 53-byte add-order message.
+
+| Workload | Volume | Latency | Throughput |
+| --- | ---: | ---: | ---: |
+| Snapshot encode+decode | 100,000 snapshots | 16.8 µs/snapshot | 0.06 M snapshots/s |
+| Delta decode | 100,000 messages | 24.2 ns/message | 41.4 M messages/s |
+
+Snapshot cost is dominated by allocating and copying the output vector; the
+codec itself only performs integer conversions. Delta decoding is a single
+allocation-free pass over a 29-byte record.
+
 ## Planned baselines
 
-- W4: market data encode/decode throughput.
 - W6: journal replay and snapshot restore time.

@@ -112,6 +112,16 @@ struct Statistics {
   long double notional_traded{};
 };
 
+struct RestingOrderView {
+  OrderId id{};
+  AccountId account{};
+  Side side{};
+  Price price{};
+  Quantity quantity{};
+
+  bool operator==(const RestingOrderView&) const = default;
+};
+
 struct BookSnapshot {
   std::vector<LevelView> bids;
   std::vector<LevelView> asks;
@@ -186,6 +196,15 @@ public:
 
   /// Check internal invariants. Intended for tests and debug builds.
   bool validate() const noexcept;
+
+  /// Resting orders in price-time order: bids from best to worst, then asks
+  /// from best to worst.
+  std::vector<RestingOrderView> resting_orders() const;
+
+  /// Reduce a resting order's quantity while keeping its time priority.
+  /// Returns false for unknown ids, non-positive quantities or a quantity
+  /// greater than the current one.
+  bool reduce(OrderId id, Quantity new_quantity);
 
   SelfTradePrevention self_trade_prevention() const noexcept {
     return stp_;

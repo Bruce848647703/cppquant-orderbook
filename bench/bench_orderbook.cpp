@@ -1,4 +1,5 @@
 #include "cppquant/engine.hpp"
+#include "cppquant/market_data.hpp"
 #include "cppquant/orderbook.hpp"
 #include "cppquant/spsc_queue.hpp"
 
@@ -15,6 +16,8 @@
 using namespace cppquant;
 
 namespace {
+
+double sink = 0.0;
 
 struct ScenarioResult {
   std::size_t orders{};
@@ -201,6 +204,47 @@ void run_engine(bool with_risk, std::size_t commands) {
               static_cast<double>(commands) / seconds / 1e6);
 }
 
+void run_market_data(std::size_t operations) {
+  OrderBook book(SelfTradePrevention::Allow, 256);
+  for (int index = 0; index < 100; ++index) {
+    book.add_limit_order(static_cast<OrderId>(index + 1), Side::Buy,
+                         1'000 - index, 1);
+    book.add_limit_order(static_cast<OrderId>(index + 101), Side::Sell,
+                         2'000 + index, 1);
+  }
+
+  const auto snapshot = make_snapshot(book, 1, 1);
+  const auto delta =
+      encode_delta(BookDelta{MarketDataMessageType::AddOrder,
+                             1,
+                             2,
+                             RestingOrderView{999, 0, Side::Buy, 900, 1},
+                             {},
+                             {},
+                             {}});
+
+  auto start = std::chrono::steady_clock::now();
+  for (std::size_t index = 0; index < operations; ++index) {
+    const auto message = encode_snapshot(snapshot);
+    const auto decoded = decode_snapshot(message);
+    sink += static_cast<double>(decoded.orders.size());
+  }
+  double seconds = elapsed_seconds(start, std::chrono::steady_clock::now());
+  std::printf("snapshot encode+decode  %10zu ops  %8.1f ns/op  %6.2f M ops/s\n",
+              operations, seconds * 1e9 / static_cast<double>(operations),
+              static_cast<double>(operations) / seconds / 1e6);
+
+  start = std::chrono::steady_clock::now();
+  for (std::size_t index = 0; index < operations; ++index) {
+    const auto decoded = decode_delta(delta);
+    sink += static_cast<double>(decoded.order.quantity);
+  }
+  seconds = elapsed_seconds(start, std::chrono::steady_clock::now());
+  std::printf("delta decode            %10zu ops  %8.1f ns/op  %6.2f M ops/s\n",
+              operations, seconds * 1e9 / static_cast<double>(operations),
+              static_cast<double>(operations) / seconds / 1e6);
+}
+
 void report(const char* name, const ScenarioResult& result) {
   const double ns_per_order =
       result.seconds * 1e9 / static_cast<double>(result.orders);
@@ -229,6 +273,7 @@ int main(int argc, char** argv) {
   std::size_t crossing_pairs = 250'000;
   std::size_t queue_messages = 10'000'000;
   std::size_t engine_commands = 1'000'000;
+  std::size_t market_data_operations = 100'000;
 
   for (int index = 1; index < argc; ++index) {
     const std::string argument = argv[index];
@@ -237,6 +282,7 @@ int main(int argc, char** argv) {
       crossing_pairs = 10'000;
       queue_messages = 1'000'000;
       engine_commands = 100'000;
+      market_data_operations = 10'000;
     } else if (argument == "--help" || argument == "-h") {
       std::printf("usage: %s [--quick]\n", argv[0]);
       return 0;
@@ -258,9 +304,11 @@ int main(int argc, char** argv) {
   const bool queue_ok = run_spsc_queue(queue_messages);
   run_engine(false, engine_commands);
   run_engine(true, engine_commands);
+  run_market_data(market_data_operations);
 
   const auto checksum = passive.quantity + crossing.quantity;
   std::printf("\nchecksum (quantity traded): %lld\n",
               static_cast<long long>(checksum));
+  std::printf("checksum (market data): %.0f\n", sink);
   return queue_ok ? 0 : 1;
 }
