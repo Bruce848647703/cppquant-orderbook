@@ -274,13 +274,20 @@ for ids.
   snapshot files and sequence validation.
 - Multi-symbol interning, book isolation, duplicate ids across books,
   per-symbol event sequences and unknown-symbol rejection.
+- A reusable replay-line parser shared by the CLI and fuzz targets, with tests
+  for comments, malformed fields and direct book application.
 - A CSV replay that exercises a mixed session end-to-end and is wired into
   CTest.
+- libFuzzer targets for the market-data decoder and replay execution, a
+  committed seed corpus and a portable mutation driver for macOS.
+- A 10M-event soak executable that validates the book every 100,000 events and
+  reports pool usage.
 - Two randomized flows with a fixed seed. After every submit/cancel/modify the
   test calls `validate()` and checks that the top of book is not crossed. The
   first flow mixes all order types and STP; the second stresses plain limit
   orders.
-- CI runs GCC, Clang and Apple clang, plus ASan/UBSan and TSan jobs.
+- CI runs GCC, Clang and Apple clang, plus ASan/UBSan, TSan and libFuzzer
+  jobs.
 
 ## Possible extensions
 

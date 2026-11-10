@@ -37,8 +37,13 @@ self-trade prevention, execution reports and book invariants.
   modified, rejected, trades, quantity and notional.
 - **Invariant checker** (`validate()`) used by the tests and safe to call from
   debug builds.
+- **CSV replay**: a reusable, fuzz-tested line parser shared by the replay CLI
+  and the fuzz targets.
+- **Fuzzing and soak**: libFuzzer targets with a seed corpus, a portable
+  mutation driver for macOS, and a 10M-event soak executable.
 - **CSV replay tool** and a deterministic benchmark.
-- CMake package export, CI on Linux/macOS with GCC, Clang, ASan/UBSan and TSan.
+- CMake package export, CI on Linux/macOS with GCC, Clang, ASan/UBSan, TSan and
+  libFuzzer.
 
 ## Quick start
 
@@ -150,6 +155,10 @@ timestamp,event,id,side,price,quantity,account
 Events: `limit`/`add`, `market`, `ioc`, `fok`, `cancel`, `modify`. `account`
 is optional. For `modify` the columns are `event,id,price,quantity`.
 
+The line parser is also the input surface for the fuzz targets. See
+[docs/FUZZ.md](docs/FUZZ.md) for the corpus, libFuzzer commands, the portable
+macOS mutation driver and the 10M-event soak test.
+
 ## Benchmark
 
 ```bash
@@ -175,7 +184,8 @@ market commands at about 12.3 ns/command (81.5 M commands/s); enabling the risk
 gateway stays within measurement noise (under 2%). A 200-order snapshot encodes
 and decodes in about 16.8 µs; an add-order delta decodes in about 24 ns.
 Journal write + read + replay runs at about 6.3M records/s for 100,000 resting
-orders.
+orders. The 10M-event soak completes in about 0.8 s with three pool chunk
+allocations and a bounded live book.
 
 These are indicative only; run the benchmark on your own hardware. See
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for the W1 pooled-allocator
@@ -344,6 +354,8 @@ covers:
   per-symbol sequences and unknown-symbol rejection;
 - journal round-trips, rejected-command omission, truncated prefixes, snapshot
   files and checksum recovery;
+- replay parsing for submit/cancel/modify lines, comments, malformed input and
+  direct application to a book;
 - two randomized flows (20,000 and 5,000 events) that call `validate()` after
   every event to check internal invariants and that the book never crosses.
 

@@ -38,6 +38,15 @@ All notable changes to this project are documented here.
 - Journal write/read with truncated-tail recovery and checksum verification.
 - Snapshot file persistence and restore.
 - Journal and snapshot tests plus `docs/RECOVERY.md`.
+- Reusable replay-line parser (`parse_replay_line`) shared by the CLI and fuzz
+  targets.
+- Replay parser tests for submit/cancel/modify, comments, malformed input and
+  direct book application.
+- libFuzzer targets for market-data decoding and replay execution, with a seed
+  corpus and a portable mutation driver for macOS.
+- 10M-event deterministic soak executable with periodic `validate()` and pool
+  diagnostics.
+- CI libFuzzer job plus `docs/FUZZ.md`.
 
 ### Changed
 

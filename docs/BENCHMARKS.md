@@ -116,6 +116,23 @@ and replays every command into a fresh book.
 The run includes file I/O, decoding and a fresh order book. Replay checks that
 all 100,000 orders rest and the checksum path is exercised.
 
+## W7: soak and fuzzing
+
+The soak executable mixes limit submissions, cancels and modifies and validates
+the book every 100,000 events.
+
+| Configuration | Events | Time | Live orders | Pool chunks |
+| --- | ---: | ---: | ---: | ---: |
+| `orderbook_soak --events 10000000` | 10,000,000 | 0.78 s | 2,035 | 3 |
+
+The live book stays bounded because cancels and fills remove orders and stale
+ids are pruned at every validation checkpoint. The fixed-block pool performs
+three backing allocations; no per-order global allocation occurs.
+
+Fuzzing is not a throughput benchmark. The libFuzzer targets run for 60 seconds
+each in CI with the committed seed corpus, and the portable smoke driver runs
+for a fixed wall-clock duration on macOS. See [FUZZ.md](FUZZ.md).
+
 ## Planned baselines
 
-- W7: fuzz/soak throughput and long-run memory.
+- W8: final release numbers.
