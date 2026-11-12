@@ -99,10 +99,10 @@ allocation-free pass over a 29-byte record.
 
 ## W5: multi-symbol engine
 
-No separate throughput benchmark yet. `MultiSymbolEngine` adds one symbol-id
-lookup per command and keeps one book per symbol; the single-book hot path and
-benchmark numbers are unchanged. A sharded multi-symbol throughput baseline
-will be added with the journal/recovery work.
+No separate throughput benchmark is reported. `MultiSymbolEngine` adds one
+symbol-id lookup per command and keeps one book per symbol; the single-book hot
+path and benchmark numbers are unchanged. The journal, fuzz and soak
+measurements cover the recovery and long-run paths instead.
 
 ## W6: journal recovery
 
