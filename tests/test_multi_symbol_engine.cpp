@@ -188,3 +188,84 @@ TEST(multi_symbol_engine_matches_the_single_book_engine) {
     CHECK_EQ(basic_events[index].order_id, multi_events[index].order_id);
   }
 }
+
+TEST(multi_symbol_engine_emits_modify_and_reject_events) {
+  MultiSymbolEngine engine;
+  const SymbolId aaa = engine.add_symbol("AAA");
+
+  CHECK(engine.submit(
+      EngineCommand::submit(aaa, order(1, 0, Side::Sell, 100, 5))));
+  engine.process();
+  drain(engine);
+
+  CHECK(engine.submit(EngineCommand::modify(aaa, 1, 99, 3)));
+  engine.process();
+  auto events = drain(engine);
+  CHECK_EQ(events.size(), 1u);
+  CHECK(events[0].type == EngineEventType::Modified);
+  CHECK_EQ(engine.book(aaa)->quantity_of(1), std::optional<Quantity>{3});
+  CHECK(engine.book(aaa)->best_ask() == std::optional<Price>{99});
+
+  CHECK(engine.submit(EngineCommand::modify(aaa, 1, 0, 3)));
+  engine.process();
+  events = drain(engine);
+  CHECK_EQ(events.size(), 1u);
+  CHECK(events[0].type == EngineEventType::ModifyRejected);
+  CHECK(events[0].reason == RejectReason::InvalidPrice);
+
+  CHECK(engine.submit(EngineCommand::modify(aaa, 99, 100, 1)));
+  engine.process();
+  events = drain(engine);
+  CHECK_EQ(events.size(), 1u);
+  CHECK(events[0].type == EngineEventType::ModifyRejected);
+  CHECK(events[0].reason == RejectReason::UnknownOrder);
+
+  CHECK(engine.submit(EngineCommand::cancel(aaa, 99)));
+  engine.process();
+  events = drain(engine);
+  CHECK_EQ(events.size(), 1u);
+  CHECK(events[0].type == EngineEventType::CancelRejected);
+  CHECK(events[0].reason == RejectReason::UnknownOrder);
+}
+
+TEST(multi_symbol_engine_emits_self_trade_cancellations) {
+  MultiSymbolEngine engine(SelfTradePrevention::CancelResting);
+  const SymbolId aaa = engine.add_symbol("AAA");
+
+  CHECK(engine.submit(
+      EngineCommand::submit(aaa, order(1, 7, Side::Sell, 100, 5))));
+  engine.process();
+  drain(engine);
+
+  CHECK(engine.submit(
+      EngineCommand::submit(aaa, order(2, 7, Side::Buy, 100, 3))));
+  engine.process();
+  const auto events = drain(engine);
+  CHECK_EQ(events.size(), 2u);
+  CHECK(events[0].type == EngineEventType::Accepted);
+  CHECK(events[1].type == EngineEventType::SelfTradeCancelled);
+  CHECK_EQ(events[1].order_id, 1u);
+  CHECK(engine.book(aaa)->contains(2));
+  CHECK(!engine.book(aaa)->contains(1));
+}
+
+TEST(multi_symbol_engine_reports_queue_and_event_counts) {
+  MultiSymbolEngine engine;
+  const SymbolId aaa = engine.add_symbol("AAA");
+  const MultiSymbolEngine& const_engine = engine;
+  CHECK(const_engine.book(aaa) != nullptr);
+  CHECK(const_engine.book(0) == nullptr);
+
+  CHECK(
+      engine.submit(EngineCommand::submit(aaa, order(1, 0, Side::Buy, 99, 1))));
+  CHECK(
+      engine.submit(EngineCommand::submit(aaa, order(2, 0, Side::Buy, 98, 1))));
+  CHECK(engine.pending_commands() >= 2u);
+  CHECK_EQ(engine.dropped_events(), 0u);
+
+  engine.process();
+  CHECK_EQ(engine.pending_commands(), 0u);
+  CHECK(engine.pending_events() >= 2u);
+  drain(engine);
+  CHECK_EQ(engine.pending_events(), 0u);
+}

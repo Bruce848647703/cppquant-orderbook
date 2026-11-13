@@ -47,6 +47,8 @@ All notable changes to this project are documented here.
 - 10M-event deterministic soak executable with periodic `validate()` and pool
   diagnostics.
 - CI libFuzzer job plus `docs/FUZZ.md`.
+- Multi-symbol engine tests for modify/cancel rejection, self-trade
+  cancellation and queue/event counters.
 - Final API/documentation index, release benchmark refresh and package version
   0.5.0.
 
