@@ -88,6 +88,18 @@ replay_journal(read.records, book);
 submit, cancel or modify cannot be applied. Construct the book with enough order
 capacity for the expected snapshot/prefix.
 
+For snapshot-plus-journal recovery, require a contiguous prefix:
+
+```cpp
+JournalReplayOptions options;
+options.first_sequence = snapshot_sequence + 1;
+options.require_contiguous = true;
+replay_journal(read.records, book, options);
+```
+
+A gap raises `journal sequence gap: expected N, got M` before the first missing
+command is silently skipped.
+
 ## Checksums
 
 `book_checksum` hashes resting orders in price-time order with FNV-1a over id,
@@ -121,9 +133,8 @@ replay_journal(read.records, book);
 - No journal compaction or rotation.
 - The journal records engine commands, not risk-gateway state or multi-symbol
   engine commands.
-- Replay does not enforce sequence continuity beyond strictly increasing
-  order. A missing record produces a different checksum rather than an
-  immediate gap error.
+- Replay enforces strictly increasing sequences by default, but only checks
+  exact continuity when `JournalReplayOptions::require_contiguous` is set.
 - Snapshot files have no checksum or compression; the market-data decoder
   validates structure but not integrity against corruption.
 
@@ -135,5 +146,7 @@ replay_journal(read.records, book);
 - A truncated tail replays the complete prefix.
 - An empty journal round-trips.
 - Bad magic and non-increasing sequences are rejected.
+- Contiguous replay rejects a missing sequence and accepts an explicit
+  `first_sequence` after a snapshot.
 - Snapshot files round-trip and truncated snapshots are rejected.
 - Checksums change with book state and reset sequences are tested.

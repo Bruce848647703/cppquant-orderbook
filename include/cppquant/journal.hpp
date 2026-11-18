@@ -55,9 +55,18 @@ void write_journal_file(const std::vector<JournalRecord>& records,
                         const std::string& path);
 JournalReadResult read_journal_file(const std::string& path);
 
+struct JournalReplayOptions {
+  /// Sequence expected for the first record when `require_contiguous` is true.
+  std::uint64_t first_sequence{1};
+  /// Reject gaps as well as duplicate or decreasing sequences.
+  bool require_contiguous{false};
+};
+
 /// Apply journal records to a restored/empty book. Throws std::runtime_error
-/// when a record cannot be applied or sequences are not strictly increasing.
-void replay_journal(const std::vector<JournalRecord>& records, OrderBook& book);
+/// when a record cannot be applied, sequences are not strictly increasing, or
+/// (with `require_contiguous`) a sequence number is missing.
+void replay_journal(const std::vector<JournalRecord>& records, OrderBook& book,
+                    const JournalReplayOptions& options = {});
 
 /// FNV-1a checksum over resting orders in price-time order.
 std::uint64_t book_checksum(const OrderBook& book) noexcept;

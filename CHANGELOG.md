@@ -49,6 +49,8 @@ All notable changes to this project are documented here.
 - CI libFuzzer job plus `docs/FUZZ.md`.
 - Multi-symbol engine tests for modify/cancel rejection, self-trade
   cancellation and queue/event counters.
+- `JournalReplayOptions` for strict contiguous replay with an explicit first
+  sequence, plus gap-recovery tests and documentation.
 - Final API/documentation index, release benchmark refresh and package version
   0.5.0.
 

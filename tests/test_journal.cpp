@@ -223,3 +223,32 @@ TEST(command_journal_sequences_reset_on_clear) {
   CHECK_EQ(journal.records().size(), 1u);
   CHECK_EQ(journal.records()[0].sequence, 1u);
 }
+
+TEST(journal_replay_can_require_contiguous_sequences) {
+  JournalRecord first;
+  first.sequence = 1;
+  first.order = limit_order(1, Side::Buy, 100, 1);
+  JournalRecord third = first;
+  third.sequence = 3;
+  third.order = limit_order(2, Side::Buy, 99, 1);
+
+  OrderBook strict(SelfTradePrevention::Allow, 8);
+  JournalReplayOptions options;
+  options.require_contiguous = true;
+  CHECK_THROW(replay_journal({first, third}, strict, options),
+              std::runtime_error);
+
+  OrderBook lenient(SelfTradePrevention::Allow, 8);
+  replay_journal({first, third}, lenient);
+  CHECK_EQ(lenient.resting_order_count(), 2u);
+  CHECK(lenient.validate());
+
+  JournalRecord second = first;
+  second.sequence = 2;
+  second.order = limit_order(3, Side::Buy, 98, 1);
+  OrderBook from_two(SelfTradePrevention::Allow, 8);
+  options.first_sequence = 2;
+  replay_journal({second, third}, from_two, options);
+  CHECK_EQ(from_two.resting_order_count(), 2u);
+  CHECK(from_two.validate());
+}

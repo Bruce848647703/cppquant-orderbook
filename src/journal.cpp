@@ -300,12 +300,21 @@ JournalReadResult read_journal_file(const std::string& path) {
   return result;
 }
 
-void replay_journal(const std::vector<JournalRecord>& records,
-                    OrderBook& book) {
+void replay_journal(const std::vector<JournalRecord>& records, OrderBook& book,
+                    const JournalReplayOptions& options) {
   std::uint64_t previous_sequence = 0;
+  std::uint64_t expected_sequence = options.first_sequence;
   for (const auto& record : records) {
     if (record.sequence <= previous_sequence) {
       throw std::runtime_error("journal sequences are not increasing");
+    }
+    if (options.require_contiguous) {
+      if (record.sequence != expected_sequence) {
+        throw std::runtime_error("journal sequence gap: expected " +
+                                 std::to_string(expected_sequence) + ", got " +
+                                 std::to_string(record.sequence));
+      }
+      ++expected_sequence;
     }
     previous_sequence = record.sequence;
 
