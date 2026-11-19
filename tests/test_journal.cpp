@@ -252,3 +252,23 @@ TEST(journal_replay_can_require_contiguous_sequences) {
   CHECK_EQ(from_two.resting_order_count(), 2u);
   CHECK(from_two.validate());
 }
+
+TEST(journal_file_replacement_leaves_no_temporary_file) {
+  const auto path = temporary_path("cppquant_journal_atomic.bin");
+  const std::string temporary = path.string() + ".tmp";
+
+  JournalRecord first;
+  first.sequence = 1;
+  first.order = limit_order(1, Side::Buy, 100, 1);
+  write_journal_file({first}, path.string());
+  CHECK(!std::filesystem::exists(temporary));
+  CHECK_EQ(read_journal_file(path.string()).records.size(), 1u);
+
+  JournalRecord second = first;
+  second.sequence = 2;
+  second.order = limit_order(2, Side::Buy, 99, 1);
+  write_journal_file({first, second}, path.string());
+  CHECK(!std::filesystem::exists(temporary));
+  CHECK_EQ(read_journal_file(path.string()).records.size(), 2u);
+  std::remove(path.string().c_str());
+}

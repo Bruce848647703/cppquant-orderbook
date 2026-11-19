@@ -2,6 +2,7 @@
 
 #include <bit>
 #include <cstddef>
+#include <filesystem>
 #include <fstream>
 #include <span>
 #include <stdexcept>
@@ -127,16 +128,32 @@ std::vector<std::byte> read_file(const std::string& path) {
 }
 
 void write_file(const std::string& path, const std::vector<std::byte>& bytes) {
-  std::ofstream file(path, std::ios::binary | std::ios::trunc);
+  const std::filesystem::path target(path);
+  std::filesystem::path temporary = target;
+  temporary += ".tmp";
+
+  std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
   if (!file) {
-    throw std::runtime_error("cannot open " + path);
+    throw std::runtime_error("cannot open " + temporary.string());
   }
   if (!bytes.empty()) {
     file.write(reinterpret_cast<const char*>(bytes.data()),
                static_cast<std::streamsize>(bytes.size()));
   }
+  file.close();
   if (!file) {
-    throw std::runtime_error("cannot write " + path);
+    std::error_code remove_error;
+    std::filesystem::remove(temporary, remove_error);
+    throw std::runtime_error("cannot write " + temporary.string());
+  }
+
+  std::error_code rename_error;
+  std::filesystem::rename(temporary, target, rename_error);
+  if (rename_error) {
+    std::error_code remove_error;
+    std::filesystem::remove(temporary, remove_error);
+    throw std::runtime_error("cannot replace " + path + ": " +
+                             rename_error.message());
   }
 }
 

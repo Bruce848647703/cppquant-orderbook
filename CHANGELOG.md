@@ -51,6 +51,8 @@ All notable changes to this project are documented here.
   cancellation and queue/event counters.
 - `JournalReplayOptions` for strict contiguous replay with an explicit first
   sequence, plus gap-recovery tests and documentation.
+- Journal and snapshot files are written through a temporary file and renamed
+  into place, with a no-leftover-temp test and updated durability notes.
 - Final API/documentation index, release benchmark refresh and package version
   0.5.0.
 

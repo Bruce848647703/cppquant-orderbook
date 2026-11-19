@@ -128,8 +128,11 @@ replay_journal(read.records, book);
 
 ## Limitations
 
-- The journal is not fsynced after every record; durability depends on the
-  caller's flush policy.
+- Journal and snapshot files are written to a sibling `.tmp` file and renamed
+  into place, but are not fsynced; durability depends on the caller's flush
+  policy and the filesystem.
+- Writers sharing one path need external serialization; the temporary name is
+  fixed.
 - No journal compaction or rotation.
 - The journal records engine commands, not risk-gateway state or multi-symbol
   engine commands.
